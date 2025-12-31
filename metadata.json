@@ -1,0 +1,5 @@
+{
+  "name": "Pocket Poker PWA",
+  "description": "A minimalist, Apple-design inspired Poker PWA with offline support, bot AI, and peer-to-peer multiplayer capabilities.",
+  "requestFramePermissions": []
+}
