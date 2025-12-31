@@ -213,10 +213,32 @@ export const PokerTable: React.FC = () => {
                 if (index === sbIndex && phase !== GamePhase.IDLE) badge = 'SB';
                 else if (index === bbIndex && phase !== GamePhase.IDLE) badge = 'BB';
 
+                // Display Logic for Win Odds
+                // Create a shallow copy for display to avoid mutating store
+                const displayPlayer = { ...player };
+                const isMe = player.id === myId;
+                
+                const showAll = gameState.config.allowAllCalculator;
+                const showSelf = gameState.config.allowCalculator && isMe;
+                // Allow cheats or if user explicitly enabled showing enemy odds (and it's not me)
+                const showCheat = !isMe && (userSettings.gameplay.showEnemyOdds || userSettings.gameplay.allowCheats);
+                
+                const hideSelfPreference = isMe && !userSettings.gameplay.showOdds;
+
+                // Mask winOdds if conditions aren't met
+                if (!showAll && !showSelf && !showCheat) {
+                    displayPlayer.winOdds = undefined;
+                }
+                
+                // Hide self odds if user preference says so
+                if (hideSelfPreference) {
+                    displayPlayer.winOdds = undefined;
+                }
+
                 return (
                     <div key={player.id} className="absolute w-max z-20 pointer-events-none" style={style}>
                         <PlayerSpot 
-                            player={player} 
+                            player={displayPlayer} 
                             isCurrentUser={player.id === myId} 
                             isActivePlayer={currentPlayerId === player.id}
                             badge={badge}

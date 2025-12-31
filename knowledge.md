@@ -124,8 +124,8 @@ Files must be located in `/public/sounds/`.
 | `sounds/card_deal.mp3` | Sharp snap of card | Initial deal (Pre-Flop) |
 | `sounds/card_fan.mp3` | Subtle flutter/slide | Flop, Turn, River deal |
 | `sounds/card_fold.mp3` | Paper sliding on felt | Player folds |
-| `sounds/turn_alarm.mp3` | Soft ticking or ding | User turn starts |
-| `sounds/action_required.mp3` | "Pop" sound | User turn reminder (optional) |
+| `sounds/timer_tick.mp3` | Soft ticking or ding | User turn starts |
+| `sounds/timer_urgent.mp3` | "Pop" sound | User turn reminder (optional) |
 | `sounds/win_stinger.mp3` | Short melodic chord | User wins the pot |
 
 ### Haptics

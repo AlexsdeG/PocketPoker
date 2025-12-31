@@ -2,7 +2,7 @@
 
 A design-first, privacy-focused Texas Hold'em Poker Progressive Web App (PWA). Play solo against bots or host peer-to-peer multiplayer games with friends, all directly in your browser without a backend server.
 
-![App Screenshot](https://github.com/AlexsdeG/PocketPoker/blob/main/PocketPocker.png)
+![App Screenshot](https://github.com/AlexsdeG/PocketPoker/blob/main/imgs/poker2.png)
 
 ## ✨ Features
 
