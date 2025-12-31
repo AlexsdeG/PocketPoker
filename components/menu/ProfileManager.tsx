@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { ArrowLeft, Plus, Check, Upload, Trash } from 'lucide-react';
+import { ArrowLeft, Plus, Check, Upload, Trash, RotateCcw } from 'lucide-react';
 
 export const ProfileManager: React.FC = () => {
   const { userSettings, setView, addProfile, setActiveProfile, updateActiveProfile } = useGameStore();
@@ -38,6 +38,10 @@ export const ProfileManager: React.FC = () => {
           reader.readAsDataURL(file);
       }
   }
+
+  const handleResetBankroll = () => {
+      updateActiveProfile({ bankroll: 10000 });
+  };
 
   return (
     <div className="min-h-screen w-full bg-felt-dark flex flex-col p-4 text-white relative">
@@ -95,7 +99,18 @@ export const ProfileManager: React.FC = () => {
                     </div>
                     
                     <div className="flex justify-between items-center bg-black/40 p-4 rounded-xl border border-white/5">
-                        <span className="text-white/70">Total Bankroll</span>
+                        <div className="flex items-center space-x-2">
+                            <span className="text-white/70">Total Bankroll</span>
+                            <Button 
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleResetBankroll}
+                                className="text-white/50 hover:text-white transition-colors h-6 w-6"
+                                title="Reset to $10,000"
+                            >
+                                <RotateCcw size={14} />
+                            </Button>
+                        </div>
                         <span className="text-green-400 font-mono text-xl font-bold">${activeProfile.bankroll.toLocaleString()}</span>
                     </div>
                 </div>

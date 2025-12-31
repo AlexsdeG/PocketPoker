@@ -159,7 +159,13 @@ export const useGameStore = create<State>()(
       updateActiveProfile: (data) => set((state) => {
         const idx = state.userSettings.profiles.findIndex(p => p.id === state.userSettings.activeProfileId);
         if (idx !== -1) {
-            Object.assign(state.userSettings.profiles[idx], data);
+            // Explicitly set properties to ensure Immer detects changes for React and Persistence
+            const profile = state.userSettings.profiles[idx];
+            if (data.username !== undefined) profile.username = data.username;
+            if (data.avatarUrl !== undefined) profile.avatarUrl = data.avatarUrl;
+            if (data.bankroll !== undefined) profile.bankroll = data.bankroll;
+            if (data.handsPlayed !== undefined) profile.handsPlayed = data.handsPlayed;
+            if (data.handsWon !== undefined) profile.handsWon = data.handsWon;
         }
       }),
 
