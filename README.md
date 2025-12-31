@@ -20,9 +20,7 @@ A design-first, privacy-focused Texas Hold'em Poker Progressive Web App (PWA). P
 - **Poker Academy**: Interactive "Learn to Play" mode explaining hand rankings and math.
 
 ### 🎨 Design & UX
-- **Apple-Inspired UI**: Glassmorphism, fluid animations, and clean typography.
-- **Mobile First**: Optimized for touch inputs and portrait mode on phones.
-- **Haptic Feedback**: Vibration cues for your turn and winning hands.
+- **Modern UI**: Glassmorphism, fluid animations, and clean typography.
 - **Sound Effects**: Immersive audio for dealing, chips, and wins.
 
 ## 🚀 Easy Install
@@ -31,8 +29,8 @@ This project uses **React**, **Vite**, and **TypeScript**.
 
 1.  **Clone the repo:**
     ```bash
-    git clone https://github.com/yourusername/pocket-poker.git
-    cd pocket-poker
+    git clone https://github.com/AlexsdeG/PocketPoker.git
+    cd PocketPoker
     ```
 
 2.  **Install dependencies:**
@@ -75,4 +73,4 @@ Special thanks to the creators who provided the audio assets for this project.
 
 ---
 
-**Privacy Note:** This app operates entirely client-side. Multiplayer connections are established directly between devices using PeerJS. No game data is stored on external servers.
+**Privacy Note:** This app operates entirely client-side. Multiplayer connections are established directly between devices using PeerJS. No game data is stored on external servers, all in local Storage.
