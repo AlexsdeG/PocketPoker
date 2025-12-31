@@ -1,4 +1,4 @@
-import { GameState, Player, PlayerActionType, HandResult, GamePhase } from '../types';
+import { GameState, Player, PlayerActionType, HandResult, GamePhase, BotPlayStyle } from '../types';
 import { HandEvaluator } from './handEvaluator';
 
 export const BotLogic = {
@@ -15,13 +15,8 @@ export const BotLogic = {
     const isCheckAvailable = callAmount === 0;
 
     // 2. Evaluate Hand Strength (0 to ~8000 depending on library, normalized here roughly)
-    // We use the HandEvaluator to get a semantic rank.
-    let strengthScore = 0;
-    
-    // Combine hole cards + community (if any)
     const handResult = HandEvaluator.evaluate(bot.holeCards, communityCards);
     
-    // Simple heuristic mapping based on Hand Name
     const rankStrength: Record<string, number> = {
         "High Card": 1,
         "Pair": 2,
@@ -36,8 +31,9 @@ export const BotLogic = {
     };
 
     const baseStrength = rankStrength[handResult.rank] || 1;
+    let strengthScore = baseStrength;
 
-    // Adjust for Pre-Flop (High Cards are good)
+    // Adjust for Pre-Flop
     if (isPreFlop) {
         const c1 = bot.holeCards[0].value;
         const c2 = bot.holeCards[1].value;
@@ -49,57 +45,86 @@ export const BotLogic = {
         else if (sum > 25) strengthScore = 6; // AK, AQ
         else if (sum > 20) strengthScore = 3; // KJ, QJ
         else strengthScore = 1;
-    } else {
-        strengthScore = baseStrength;
     }
 
-    // 3. Randomness based on Difficulty (Bluff factor)
+    // 3. Playstyle Modifiers
+    const style = bot.playStyle || BotPlayStyle.RANDOM;
     const roll = Math.random();
-    const difficulty = bot.difficulty || 'MEDIUM';
     
-    let aggressionThreshold = 0.7; // Needs 7/10 strength to raise
-    let looseness = 0.3; // Will play 30% of hands
+    // "Schlitzohr" (Tricky) - sometimes bluffs weak hands, traps with strong hands
+    const isSchlitzohr = style === BotPlayStyle.SCHLITZOHR;
+    // "Aggressive" - Raises more, calls less
+    const isAggressive = style === BotPlayStyle.AGGRESSIVE;
+    // "Passive" - Calls more, rarely raises
+    const isPassive = style === BotPlayStyle.PASSIVE;
+    
+    // 4. Decision Logic
 
-    if (difficulty === 'EASY') {
-        aggressionThreshold = 0.9; // Only raise on nuts
-        looseness = 0.8; // Calls too much
-    } else if (difficulty === 'HARD') {
-        aggressionThreshold = 0.5; // Aggressive
-        looseness = 0.4;
+    // --- RANDOM ---
+    // High Chaos, but still grounded in rule compliance
+    if (style === BotPlayStyle.RANDOM) {
+        const randomRoll = Math.random();
+        if (randomRoll < 0.2) return { action: PlayerActionType.FOLD }; // 20% fold always
+        if (randomRoll < 0.6) return { action: isCheckAvailable ? PlayerActionType.CHECK : PlayerActionType.CALL }; 
+        // Raise logic
+        const raiseAmt = minBet + gameState.bigBlind;
+        if (bot.chips >= raiseAmt - currentBet) {
+             return { action: PlayerActionType.RAISE, amount: raiseAmt + minBet };
+        }
+        return { action: PlayerActionType.CALL };
     }
 
-    // 4. Decision Tree
-
-    // FOLD if very weak and facing a bet
-    if (!isCheckAvailable && strengthScore < 2 && !isPreFlop && roll > looseness) {
-        return { action: PlayerActionType.FOLD };
-    }
+    // --- STRATEGIC TYPES ---
     
-    // RAISE if strong
-    if (strengthScore >= 5 || (roll > 0.9 && difficulty === 'HARD')) { // Random bluff
-         // Raise 2.5x to 3x min bet
+    // FOLD LOGIC
+    // Passive folds easily. Aggressive holds on longer.
+    let foldThreshold = 2; 
+    if (isAggressive) foldThreshold = 1.5;
+    if (isPassive) foldThreshold = 2.5;
+
+    // If check is available, we almost never fold unless we are "Random" or weird.
+    // So only check Fold if we have to pay.
+    if (!isCheckAvailable) {
+         // If huge bet relative to pot, consider folding more
+         const potOdds = callAmount / (pot + callAmount);
+         if (strengthScore < foldThreshold && potOdds > 0.1) {
+             // Schlitzohr might float a weak hand
+             if (isSchlitzohr && roll > 0.8) {
+                 // Float
+             } else {
+                 return { action: PlayerActionType.FOLD };
+             }
+         }
+    }
+
+    // RAISE LOGIC
+    let raiseThreshold = 5;
+    if (isAggressive) raiseThreshold = 4;
+    if (isPassive) raiseThreshold = 8; // Only nuts
+    
+    // Bluff Logic
+    let bluffChance = 0;
+    if (isAggressive) bluffChance = 0.3;
+    if (isSchlitzohr) bluffChance = 0.4;
+    
+    const wantsToRaise = strengthScore >= raiseThreshold || (roll < bluffChance && strengthScore < 3);
+
+    if (wantsToRaise) {
+         // Schlitzohr Trap: Check-Raise or slow play strong hands
+         if (isSchlitzohr && strengthScore > 7 && roll < 0.5) {
+             return { action: isCheckAvailable ? PlayerActionType.CHECK : PlayerActionType.CALL };
+         }
+
          const raiseAmt = minBet + (minBet > 0 ? minBet : gameState.bigBlind); 
-         // Check affordability
          if (bot.chips >= raiseAmt - currentBet) {
              return { action: PlayerActionType.RAISE, amount: raiseAmt + minBet };
          }
     }
 
-    // CALL / CHECK
-    if (isCheckAvailable) {
-        return { action: PlayerActionType.CHECK };
-    } else {
-        // Only call if chips allow
-        if (bot.chips >= callAmount) {
-            return { action: PlayerActionType.CALL };
-        } else {
-            // Force Fold if can't afford (All-in logic handles inside store, but here we be safe)
-            // If we have chips, call (All-in)
-            return { action: PlayerActionType.CALL }; 
-        }
-    }
-
-    // Fallback
+    // CALL/CHECK as fallback
+    if (isCheckAvailable) return { action: PlayerActionType.CHECK };
+    if (bot.chips >= callAmount) return { action: PlayerActionType.CALL };
+    
     return { action: PlayerActionType.FOLD };
   }
 };

@@ -36,6 +36,13 @@ export enum BotDifficulty {
   HARD = 'HARD',
 }
 
+export enum BotPlayStyle {
+  RANDOM = 'RANDOM',
+  AGGRESSIVE = 'AGGRESSIVE',
+  PASSIVE = 'PASSIVE',
+  SCHLITZOHR = 'SCHLITZOHR',
+}
+
 export enum DeckType {
   STANDARD = 'STANDARD',
   SHORT_DECK = 'SHORT_DECK', // Removes 2-5
@@ -56,6 +63,7 @@ export interface BotConfig {
     name: string;
     color: string; // hex
     useAI?: boolean; // New: Use Gemini AI
+    playStyle?: BotPlayStyle; // New: Bot Personality
 }
 
 export interface GameSettings {
@@ -117,6 +125,7 @@ export interface Player {
   avatarUrl?: string; // For user
   color?: string; // For bots
   difficulty?: BotDifficulty;
+  playStyle?: BotPlayStyle; // New: Bot Personality
   holeCards: CardDef[];
   isActive: boolean;
   hasActed: boolean;

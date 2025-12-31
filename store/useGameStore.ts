@@ -397,6 +397,7 @@ export const useGameStore = create<State>()(
                     useAI: config ? config.useAI : false,
                     color: config ? config.color : '#6b7280',
                     difficulty: settings.botDifficulty,
+                    playStyle: config ? config.playStyle : undefined,
                     holeCards: [],
                     isActive: true,
                     hasActed: false,

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { BotDifficulty, DeckType, GameSettings, BotConfig } from '../../types';
-import { ArrowLeft, Users, Coins, Brain, ArrowUp, ArrowDown, Settings as SettingsIcon, Edit2, Sparkles, Copy, Share2, Wifi, Calculator, Check, Clock } from 'lucide-react';
+import { BotDifficulty, DeckType, GameSettings, BotConfig, BotPlayStyle } from '../../types';
+import { ArrowLeft, Users, Coins, Brain, ArrowUp, ArrowDown, Settings as SettingsIcon, Edit2, Sparkles, Copy, Share2, Wifi, Calculator, Check, Clock, Dice5, Zap, Shield, Ghost } from 'lucide-react';
 
 export const GameSetup: React.FC = () => {
   const { setView, initializeGame, userSettings, toggleSetting, networkState, currentView, updateLobbySettings, leaveGame } = useGameStore();
@@ -352,6 +352,25 @@ export const GameSetup: React.FC = () => {
                                             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditBotId(isEditing ? null : id)}>
                                                 <SettingsIcon size={12} />
                                             </Button>
+                                            
+                                            {/* Playstyle Selector */}
+                                            {isBot && !isClient && (
+                                                <button 
+                                                    onClick={() => {
+                                                        const styles = Object.values(BotPlayStyle);
+                                                        const current = settings.botConfigs[id]?.playStyle || BotPlayStyle.RANDOM;
+                                                        const nextIdx = (styles.indexOf(current) + 1) % styles.length;
+                                                        updateBotConfig(id, 'playStyle', styles[nextIdx]);
+                                                    }}
+                                                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                                                    title={`Playstyle: ${settings.botConfigs[id]?.playStyle || 'RANDOM'}`}
+                                                >
+                                                    {(!settings.botConfigs[id]?.playStyle || settings.botConfigs[id]?.playStyle === 'RANDOM') && <Dice5 size={12} />}
+                                                    {settings.botConfigs[id]?.playStyle === 'AGGRESSIVE' && <Zap size={12} className="text-orange-400" />}
+                                                    {settings.botConfigs[id]?.playStyle === 'PASSIVE' && <Shield size={12} className="text-blue-400" />}
+                                                    {settings.botConfigs[id]?.playStyle === 'SCHLITZOHR' && <Ghost size={12} className="text-purple-400" />}
+                                                </button>
+                                            )}
                                         </>
                                     )}
                                     {!isClient && (
