@@ -1,88 +1,121 @@
 import React, { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { GamePhase, PlayerActionType } from '../types';
+import { GamePhase } from '../types';
 
 export const GameEffects: React.FC = () => {
-  const { gameState, userSettings } = useGameStore();
-  const { phase, currentPlayerId, winners, lastAggressorId } = gameState;
+  const { gameState, userSettings, networkState, currentView } = useGameStore();
+  const { lastEvent, turnExpiresAt, winners } = gameState;
   const { audio, gameplay } = userSettings;
+  
+  const lastEventIdRef = useRef<string | null>(null);
+  const lastTickTime = useRef(0);
+  const timerIntervalRef = useRef<any>(null);
 
-  // Refs to track previous state for diffing
-  const prevPhase = useRef(phase);
-  const prevPlayerId = useRef(currentPlayerId);
-  const prevWinnersLen = useRef(winners.length);
+  // CRITICAL: Stop all effects if we are not in the Game View
+  const isGameActive = currentView === 'GAME';
 
-  // Sound Player Helper
-  const playSound = (filename: string) => {
-    if (!audio.sfxEnabled) return;
+  // Robust Sound Player with Fallback (mp3 -> wav -> ogg)
+  const playSound = (baseFilename: string) => {
+    if (!audio.sfxEnabled || !isGameActive) return;
     
-    // Silent fail architecture: Create audio, try play, catch error (404/Not Allowed)
-    const sound = new Audio(`/sounds/${filename}`);
-    sound.volume = audio.masterVolume;
+    const formats = ['mp3', 'wav', 'ogg'];
+    const nameWithoutExt = baseFilename.replace(/\.(mp3|wav|ogg)$/, '');
     
-    sound.play().catch((e) => {
-        // Expected error if file missing or auto-play blocked. 
-        // We silent fail as per requirements.
-    });
+    const tryPlay = (index: number) => {
+        if (index >= formats.length) return;
+        
+        const ext = formats[index];
+        const src = `/sounds/${nameWithoutExt}.${ext}`;
+        const sound = new Audio(src);
+        sound.volume = audio.masterVolume;
+        
+        sound.onerror = () => {
+             tryPlay(index + 1);
+        };
+
+        sound.play().catch(() => {
+             // Autoplay block or error
+        });
+    };
+
+    tryPlay(0);
   };
 
-  // Haptics Helper
   const triggerHaptic = (pattern: number | number[]) => {
-    if (!gameplay.hapticsEnabled || !navigator.vibrate) return;
+    if (!gameplay.hapticsEnabled || !navigator.vibrate || !isGameActive) return;
     navigator.vibrate(pattern);
   };
 
-  // 1. Phase Change Effects (Dealing Cards)
+  // 1. React to Game Events (Single Trigger)
   useEffect(() => {
-    if (prevPhase.current !== phase) {
-        if (phase === GamePhase.PRE_FLOP) {
-            playSound('card_deal.mp3');
-        } else if ([GamePhase.FLOP, GamePhase.TURN, GamePhase.RIVER].includes(phase)) {
-            playSound('card_fan.mp3');
-        } else if (phase === GamePhase.SHOWDOWN) {
-            // No specific sound, maybe generic reveal?
-        }
-        prevPhase.current = phase;
-    }
-  }, [phase]);
+      if (!isGameActive || !lastEvent || lastEvent.id === lastEventIdRef.current) return;
+      lastEventIdRef.current = lastEvent.id;
 
-  // 2. Turn Change Effects (Alarm / Vibration)
-  useEffect(() => {
-    if (prevPlayerId.current !== currentPlayerId) {
-        if (currentPlayerId === 'user') {
-            // User's Turn
-            playSound('turn_alarm.mp3');
-            triggerHaptic(50); // Short tick
-        } else if (currentPlayerId) {
-            // Bot Turn - maybe subtle click?
-            // playSound('soft_click.mp3'); 
-        }
-        prevPlayerId.current = currentPlayerId;
-    }
-  }, [currentPlayerId]);
-
-  // 3. Win Effects
-  useEffect(() => {
-      if (winners.length > 0 && winners.length !== prevWinnersLen.current) {
-          playSound('pot_collect.mp3');
-          
-          if (winners.includes('user')) {
-              playSound('win_stinger.mp3');
-              triggerHaptic([100, 50, 100, 50, 200]); // Victory vibration
-          }
+      switch(lastEvent.type) {
+          case 'DEAL':
+              playSound('card_deal.mp3');
+              break;
+          case 'FLOP':
+          case 'TURN_RIVER':
+              playSound('card_fan.mp3');
+              break;
+          case 'CHECK':
+          case 'CALL':
+          case 'RAISE':
+              playSound('bet_clink.mp3');
+              break;
+          case 'ALL_IN':
+              playSound('all_in_push.mp3');
+              break;
+          case 'FOLD':
+              playSound('card_fold.mp3');
+              break;
+          case 'TURN_CHANGE':
+              // Handled by currentPlayer logic if needed, or specific alarm
+              if (lastEvent.playerId && lastEvent.playerId === (networkState.myPeerId || 'user')) {
+                  playSound('turn_alarm.mp3');
+                  triggerHaptic(50);
+              }
+              break;
+          case 'WIN':
+              const myId = networkState.myPeerId || 'user';
+              if (winners.includes(myId)) {
+                  playSound('win_stinger.mp3');
+                  triggerHaptic([100, 50, 100, 50, 200]);
+              } else {
+                  playSound('pot_collect.mp3');
+              }
+              break;
       }
-      prevWinnersLen.current = winners.length;
-  }, [winners]);
+  }, [lastEvent, winners, networkState.myPeerId, gameplay.hapticsEnabled, isGameActive]);
 
-  // 4. Action Effects (Betting/Folding)
-  // Since we don't have a strict "Last Action" timestamp in state to diff,
-  // we can infer some actions or add a listener. 
-  // For simplicity in this architecture, we might miss the exact moment of a "Check" vs "Call" 
-  // without a dedicated event bus, but we can hook into pot changes or lastAggressor.
-  // Ideally, `useGameStore` would expose a transient event, but we'll approximate:
-  
-  // NOTE: In a real production app, I'd add an `eventQueue` to the store.
-  // For now, we rely on phase/turn changes covering most "Juice".
+  // 2. Timer Logic (Ticking)
+  useEffect(() => {
+      // Clear previous interval immediately
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
-  return null; // Headless component
+      if (!isGameActive || !turnExpiresAt || !gameState.currentPlayerId) return;
+
+      timerIntervalRef.current = setInterval(() => {
+          const now = Date.now();
+          const timeLeft = Math.ceil((turnExpiresAt - now) / 1000);
+          
+          if (timeLeft <= 10 && timeLeft > 0) {
+              if (now - lastTickTime.current > 900) {
+                  if (timeLeft <= 3) {
+                       playSound('timer_urgent.mp3');
+                  } else {
+                       playSound('timer_tick.mp3');
+                  }
+                  lastTickTime.current = now;
+              }
+          }
+      }, 200);
+
+      return () => {
+          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      };
+  }, [turnExpiresAt, gameState.currentPlayerId, isGameActive]);
+
+  return null;
 };

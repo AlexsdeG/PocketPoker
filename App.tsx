@@ -1,21 +1,43 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useGameStore } from './store/useGameStore';
 import { Button } from './components/Button';
 import { Card } from './components/Card';
-import { Settings, Play, GraduationCap, ShieldCheck } from 'lucide-react';
+import { Settings, Play, GraduationCap, ShieldCheck, UserPlus } from 'lucide-react';
 import { PokerTable } from './components/game/PokerTable';
 import { GameSetup } from './components/menu/GameSetup';
 import { ProfileManager } from './components/menu/ProfileManager';
 import { AcademyModal } from './components/overlays/AcademyModal';
 import { GameEffects } from './components/GameEffects';
+import { NetworkManager } from './logic/NetworkManager';
 
 const App: React.FC = () => {
-  const { userSettings, currentView, setView } = useGameStore();
+  const { userSettings, currentView, setView, initMultiplayer, leaveGame } = useGameStore();
 
   const activeProfile = userSettings.profiles.find(p => p.id === userSettings.activeProfileId) || userSettings.profiles[0];
 
+  // Global cleanup on mount to ensure no stale peers
+  useEffect(() => {
+      // Force cleanup of any lingering connections from previous reloads/sessions
+      NetworkManager.getInstance().reset();
+  }, []);
+
+  // Check for Room ID in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get('room');
+    if (roomId) {
+        initMultiplayer('CLIENT', roomId);
+        setView('LOBBY'); // This will direct to GameSetup in read-only/lobby mode
+    }
+  }, [initMultiplayer, setView]);
+
+  const handleStartHost = () => {
+      initMultiplayer('HOST');
+      setView('SETUP');
+  };
+
   return (
-    <div className="h-screen w-full bg-felt-dark flex flex-col items-center justify-center p-0 font-sans text-white overflow-hidden relative">
+    <div className="h-screen w-full bg-felt-dark flex flex-col items-center justify-center p-4 md:p-0 font-sans text-white overflow-hidden relative">
       {/* Background Texture Overlay */}
       <div className="absolute inset-0 opacity-20 pointer-events-none" 
            style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
@@ -25,7 +47,8 @@ const App: React.FC = () => {
 
       {currentView === 'GAME' && <PokerTable />}
       
-      {currentView === 'SETUP' && <GameSetup />}
+      {/* Setup handles both Solo and Multiplayer Host/Client Lobby */}
+      {(currentView === 'SETUP' || currentView === 'LOBBY') && <GameSetup />}
       
       {currentView === 'PROFILES' && <ProfileManager />}
 
@@ -72,8 +95,8 @@ const App: React.FC = () => {
                 Solo Match (Bot)
             </Button>
             
-            <Button variant="secondary" className="w-full h-14 text-lg">
-                <ShieldCheck className="w-5 h-5 mr-2" />
+            <Button variant="secondary" className="w-full h-14 text-lg" onClick={handleStartHost}>
+                <UserPlus className="w-5 h-5 mr-2" />
                 Multiplayer
             </Button>
 
@@ -86,7 +109,7 @@ const App: React.FC = () => {
             {/* Status Footer */}
             <div className="text-center">
                 <p className="text-xs text-white/30">
-                    v0.2.1
+                    v0.3.0 (Multiplayer)
                 </p>
             </div>
         </div>

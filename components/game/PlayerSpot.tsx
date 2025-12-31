@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Player, CardDef } from '../../types';
 import { PlayingCard } from '../PlayingCard';
 import { User, Bot, CheckCircle, Trophy, Loader2 } from 'lucide-react';
@@ -11,26 +11,39 @@ interface PlayerSpotProps {
   isDealer: boolean;
   isWinner: boolean;
   showCards: boolean;
+  turnExpiresAt?: number | null;
 }
 
-export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, isCurrentUser, isActivePlayer, badge, isDealer, isWinner, showCards }) => {
+export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, isCurrentUser, isActivePlayer, badge, isDealer, isWinner, showCards, turnExpiresAt }) => {
   const [hoveredCardIdx, setHoveredCardIdx] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState(0);
 
-  // Logic to show cards
+  // Timer Visual Logic
+  useEffect(() => {
+      if (!isActivePlayer || !turnExpiresAt) {
+          setTimeLeft(0);
+          return;
+      }
+      const interval = setInterval(() => {
+          const delta = Math.max(0, turnExpiresAt - Date.now());
+          setTimeLeft(Math.ceil(delta / 1000));
+      }, 100);
+      return () => clearInterval(interval);
+  }, [isActivePlayer, turnExpiresAt]);
+
   const cardsVisible = isCurrentUser || showCards || (player.holeCards.length > 0 && player.isActive && player.isAllIn && showCards);
   const opacityClass = !player.isActive ? 'opacity-50 grayscale' : 'opacity-100';
 
   return (
     <div className={`flex flex-col items-center relative group ${opacityClass} transition-all duration-300 pointer-events-auto`}>
       
-      {/* Cards Area - Enhanced Hover with Z-Index fix */}
+      {/* Cards Area */}
       <div className="flex -space-x-8 sm:-space-x-10 min-h-[96px] sm:min-h-[112px] relative z-10 cursor-default">
         {player.holeCards.map((card, idx) => {
             const cardId = `${card.rank}${card.suit}`;
             const isWinningCard = isWinner && player.handResult?.winningCards?.includes(cardId);
             const isHovered = hoveredCardIdx === idx;
             
-            // Highlight Styles
             const borderStyle = isWinningCard 
                 ? 'ring-4 ring-brand-yellow shadow-[0_0_20px_rgba(255,204,0,0.8)] z-30' 
                 : 'group-hover:ring-2 group-hover:ring-white/20';
@@ -62,7 +75,7 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, isCurrentUser, i
         )}
       </div>
 
-      {/* Avatar & Info - Info Box */}
+      {/* Info Box */}
       <div className={`relative px-4 py-2 mt-2 rounded-xl backdrop-blur-md border transition-all duration-300 min-w-[120px] text-center z-20
         ${isCurrentUser ? '-mt-2 mb-2' : ''} 
         ${isWinner ? 'bg-brand-yellow text-black border-white shadow-2xl scale-110' : ''}
@@ -70,14 +83,21 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, isCurrentUser, i
         ${!isActivePlayer && !isWinner ? 'bg-black/60 border-white/10' : ''}
       `}>
         
-        {/* Thinking Spinner (Top Right Corner of Box) */}
-        {isActivePlayer && !isWinner && (
+        {/* Thinking Spinner */}
+        {isActivePlayer && !isWinner && !turnExpiresAt && (
             <div className="absolute -top-2 -right-2 bg-brand-yellow text-black rounded-full p-0.5 shadow-lg z-40 animate-in fade-in zoom-in">
                 <Loader2 size={12} className="animate-spin" />
             </div>
         )}
 
-        {/* Dealer / SB / BB Badge (Top Left of Info Box) */}
+        {/* Countdown Timer Badge */}
+        {isActivePlayer && !isWinner && turnExpiresAt && (
+             <div className={`absolute -top-3 -right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-lg z-40 border border-white/20 animate-in fade-in zoom-in ${timeLeft <= 5 ? 'bg-red-500 animate-pulse text-white' : 'bg-brand-yellow text-black'}`}>
+                {timeLeft}s
+             </div>
+        )}
+
+        {/* Dealer / SB / BB Badge */}
         {(badge || isDealer) && (
             <div className="absolute -top-3 -left-3 flex flex-col space-y-1 items-center z-30">
                 {badge && (
@@ -111,21 +131,18 @@ export const PlayerSpot: React.FC<PlayerSpotProps> = ({ player, isCurrentUser, i
             ${player.chips.toLocaleString()}
         </div>
 
-        {/* Odds Indicator (Bottom Right of Info Box) */}
-        {player.winOdds !== undefined && player.isActive && !isWinner && (
+        {typeof player.winOdds === 'number' && player.isActive && !isWinner && (
             <div className="absolute -bottom-2 -right-2 bg-black/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded border border-white/20 shadow-md whitespace-nowrap z-30">
                 <span className={player.winOdds > 50 ? 'text-green-400' : 'text-white'}>{player.winOdds}%</span>
             </div>
         )}
 
-        {/* Hand Result Text */}
         {isWinner && player.handResult && (
              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 text-[10px] font-bold text-brand-yellow bg-black/90 px-3 py-1 rounded-full whitespace-nowrap border border-white/10 shadow-xl z-50">
                 {player.handResult.rank}
              </div>
         )}
 
-        {/* Bet Badge (Top Right) */}
         {player.currentBet > 0 && (
              <div className="absolute -right-3 -top-3 bg-brand-blue text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg border border-white/20 z-30">
                 ${player.currentBet}

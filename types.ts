@@ -63,12 +63,17 @@ export interface GameSettings {
   blindStructure: 'standard' | 'turbo';
   anteEnabled: boolean;
   anteAmount: number;
-  botCount: number;
+  botCount: number; // In MP, acts as "Total Players" target
   botDifficulty: BotDifficulty;
   deckType: DeckType;
   playerOrder: string[]; 
   botConfigs: Record<string, BotConfig>;
-  aiCanSeeOdds: boolean; // New: Allow AI to see calculated win odds
+  aiCanSeeOdds: boolean; 
+  // New Settings
+  allowCalculator: boolean; // Allow players to see their own odds
+  allowAllCalculator: boolean; // Allow players to see everyone's odds
+  turnTimerEnabled: boolean; // Enable turn timer
+  turnTimerSeconds: number; // Seconds per turn
 }
 
 export interface UserSettings {
@@ -119,11 +124,21 @@ export interface Player {
   isAllIn: boolean;
   handResult?: HandResult;
   winOdds?: number; // Calculated probability 0-100
+  isRemote?: boolean; // New: Is this a remote P2P player?
+  peerId?: string; // New: P2P ID
 }
 
 export interface Pot {
   amount: number;
   eligiblePlayers: string[];
+}
+
+// New: Event tracking for Sounds
+export interface GameEvent {
+    id: string; // uuid to ensure uniqueness for effects
+    type: 'DEAL' | 'FLOP' | 'TURN_RIVER' | 'CHECK' | 'CALL' | 'RAISE' | 'ALL_IN' | 'FOLD' | 'WIN' | 'TURN_CHANGE';
+    playerId?: string;
+    amount?: number;
 }
 
 export interface GameState {
@@ -135,6 +150,7 @@ export interface GameState {
   communityCards: CardDef[];
   players: Player[];
   currentPlayerId: string | null;
+  turnExpiresAt: number | null; // Timestamp for turn expiry
   dealerIndex: number;
   smallBlind: number;
   bigBlind: number;
@@ -143,4 +159,20 @@ export interface GameState {
   lastAggressorId: string | null;
   winners: string[]; // IDs
   handsPlayedInSession: number;
+  lastEvent: GameEvent | null; // Trigger for UI/Audio effects
+}
+
+// Multiplayer Specific Types
+export interface NetworkState {
+  isMultiplayer: boolean;
+  isHost: boolean;
+  roomId: string | null;
+  myPeerId: string | null;
+  connectedPeers: { id: string; name: string; avatarUrl?: string }[];
+  lobbySettings?: GameSettings; // Synced settings in lobby
+}
+
+export interface NetMessage {
+  type: 'JOIN' | 'WELCOME' | 'LOBBY_UPDATE' | 'LOBBY_SETTINGS' | 'GAME_START' | 'STATE_UPDATE' | 'ACTION' | 'ERROR' | 'HOST_DISCONNECT' | 'LEAVE';
+  payload: any;
 }

@@ -2,44 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2024-05-24
+### Added
+- **Multiplayer (P2P):**
+    - Host/Client architecture using PeerJS.
+    - **Lobby System:** Invite friends via Link.
+    - **Hybrid Mode:** Play with Friends + Bots in the same game.
+    - **Live State Sync:** Host broadcasts game state to all connected peers.
+    - **Action Forwarding:** Clients control their avatar remotely.
+- **UI Improvements:**
+    - Mobile padding added to Main Menu.
+    - Dynamic Seating List showing Human vs Bot avatars.
+    - "Room Code" display and "Copy Link" buttons in Lobby.
+
+## [0.2.2] - 2024-05-23
+### Added
+- **Audio & Haptics:** Sound effects for dealing, betting, winning. Vibration feedback on mobile.
+- **Visuals:** Rotating "Thinking" spinner for active players.
+- **Fixes:** Unique random bot colors, bot color persistence.
+
 ## [0.2.1] - 2024-05-23
 ### Added
-- **Features:**
-    - Full **Academy View** accessible from Main Menu with updated visuals.
-    - **Turn Order List** in-game showing history and next players.
-    - **Rotate Dealer** setting (Default: On).
-    - **Show Opponent Odds** setting (Default: Off).
-    - Manual Raise Input via Pen icon.
-    - Bankroll persistence to profile.
-- **UI/UX:**
-    - Improved **Radial Table Layout** to prevent bots from overlapping on smaller screens.
-    - Highlighting for **Winning Community Cards** (Gold Glow).
-    - Enhanced Card Hover: Now brings card to front (`z-index`) correctly.
-    - Added separate white dots background layer to Setup/Profile screens.
-
-### Fixed
-- **Bugs:**
-    - Resolved `Hand Evaluation Error` crash by guarding against empty arrays in `HandEvaluator`.
-    - Fixed right-side bot interaction blocking money display (CSS overlapping issue).
-    - Fixed Dealer Button Z-Index and positioning.
-    - Removed "Dealing..." text overlap.
+- **Features:** Gemini AI Bot integration, Academy View, Turn Order List.
+- **UI/UX:** Radial Table Layout improvements, Winning Hand Highlight.
 
 ## [0.2.0] - 2024-05-23
 ### Added
-- **Academy:** In-game help modal with hand rankings and math explanations.
-- **Odds Calculator:** Real-time Monte Carlo simulation for win probability.
-- **Profile:** Custom avatar upload support.
-- **Visuals:** Gold highlight for winners, Dealer/SB/BB chips.
-
-## [0.1.1] - 2024-05-22
-### Fixed
-- **Critical Bugfix:** Resolved `TypeError: can't access property "useContext"` by downgrading React to 18.2.0.
+- **Academy:** In-game help modal.
+- **Odds Calculator:** Real-time stats.
+- **Profile:** Custom avatar upload.
 
 ## [0.1.0] - 2024-05-22
 ### Added
-- **Game UI (Phase 2):** PokerTable, PlayerSpot, PlayingCard components.
-- **Infrastructure:** Zustand store, View switching.
-
-## [0.0.1] - 2024-05-22
-### Added
-- Initial project foundation.
+- Initial Release: Core Engine, UI, State Management.

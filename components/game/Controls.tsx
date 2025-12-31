@@ -5,7 +5,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { Edit2 } from 'lucide-react';
 
 export const Controls: React.FC = () => {
-  const { gameState, playerAction } = useGameStore();
+  const { gameState, playerAction, networkState } = useGameStore();
   const { currentPlayerId, players, minBet, minRaise, pot } = gameState;
   
   const [showRaiseInput, setShowRaiseInput] = useState(false);
@@ -13,8 +13,10 @@ export const Controls: React.FC = () => {
   const [isEditingAmount, setIsEditingAmount] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   
-  const user = players.find(p => p.id === 'user');
-  const isUserTurn = currentPlayerId === 'user';
+  // Identify Local User
+  const myId = networkState.isMultiplayer && networkState.myPeerId ? networkState.myPeerId : 'user';
+  const user = players.find(p => p.id === myId);
+  const isUserTurn = currentPlayerId === myId;
 
   // Update default raise amount when turn starts
   useEffect(() => {
@@ -63,7 +65,7 @@ export const Controls: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-black/90 via-black/80 to-transparent flex flex-col items-center space-y-4 z-50">
+    <div className="fixed bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-black/90 via-black/80 to-transparent flex flex-col items-center space-y-4 z-50 pointer-events-auto">
       
       {/* Raise Slider / Input */}
       {showRaiseInput && (

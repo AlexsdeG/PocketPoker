@@ -12,9 +12,11 @@ import { GeminiAI } from '../../logic/GeminiAI';
 import { AcademyModal } from '../overlays/AcademyModal';
 
 export const PokerTable: React.FC = () => {
-  const { gameState, setView, startGame, restartMatch, playerAction, userSettings } = useGameStore();
-  const { players, communityCards, pot, currentPlayerId, phase, winners, dealerIndex } = gameState;
+  const { gameState, setView, startGame, restartMatch, playerAction, userSettings, networkState, handleTurnTimeout, leaveGame } = useGameStore();
+  const { players, communityCards, pot, currentPlayerId, phase, winners, dealerIndex, turnExpiresAt } = gameState;
   const [showAcademy, setShowAcademy] = useState(false);
+  
+  const isHost = networkState.isHost || !networkState.isMultiplayer;
 
   // Bot Turn Effect
   useEffect(() => {
@@ -23,6 +25,9 @@ export const PokerTable: React.FC = () => {
     const currentPlayer = players.find(p => p.id === currentPlayerId);
     if (currentPlayer && currentPlayer.isBot) {
         
+        // Only the Host runs bot logic
+        if (!isHost) return;
+
         const makeDecision = async () => {
              if (currentPlayer.useAI) {
                  // Use Gemini AI
@@ -40,15 +45,33 @@ export const PokerTable: React.FC = () => {
 
         return () => clearTimeout(timer);
     }
-  }, [currentPlayerId, phase, players, gameState, playerAction]);
+  }, [currentPlayerId, phase, players, gameState, playerAction, isHost]);
 
-  const userIndex = players.findIndex(p => p.id === 'user');
+  // Turn Timer Checker (Host Only)
+  useEffect(() => {
+      if (!isHost || !turnExpiresAt || phase === GamePhase.IDLE || phase === GamePhase.SHOWDOWN) return;
+      
+      const interval = setInterval(() => {
+          if (Date.now() > turnExpiresAt) {
+              handleTurnTimeout();
+          }
+      }, 500);
+
+      return () => clearInterval(interval);
+  }, [isHost, turnExpiresAt, phase, handleTurnTimeout]);
+
+  // DETERMINE LOCAL USER INDEX (For Relative Seating)
+  // In Singleplayer, ID is 'user'. In Multiplayer, it's networkState.myPeerId
+  const myId = networkState.isMultiplayer && networkState.myPeerId ? networkState.myPeerId : 'user';
+  const myIndex = players.findIndex(p => p.id === myId);
 
   // Helper to calculate radial position
   const getPositionStyle = (index: number, total: number) => {
-    const relativeIndex = (index - userIndex + total) % total;
+    // Offset calculation: (index - myIndex + total) % total
+    // This makes myIndex become 0 (Bottom Center)
+    const relativeIndex = (index - myIndex + total) % total;
     
-    if (index === userIndex) {
+    if (relativeIndex === 0) {
         // User always at bottom center
         return { bottom: '4%', left: '50%', transform: 'translate(-50%, 0)' };
     }
@@ -84,7 +107,7 @@ export const PokerTable: React.FC = () => {
 
       {/* Top Bar */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10 pointer-events-none">
-        <Button variant="ghost" size="icon" className="pointer-events-auto" onClick={() => setView('MENU')}>
+        <Button variant="ghost" size="icon" className="pointer-events-auto" onClick={() => leaveGame()}>
             <ArrowLeft />
         </Button>
         <div className="glass-panel px-4 py-2 rounded-full text-xs font-mono text-white/60">
@@ -149,13 +172,19 @@ export const PokerTable: React.FC = () => {
                 {phase === GamePhase.IDLE && (
                     <div className="animate-in fade-in zoom-in duration-300">
                         {players.filter(p => p.chips > 0).length > 1 ? (
-                            <Button size="lg" onClick={startGame} className="animate-pulse shadow-brand-blue/50 shadow-xl scale-125">
-                                Deal Hand
-                            </Button>
+                            isHost ? (
+                                <Button size="lg" onClick={startGame} className="animate-pulse shadow-brand-blue/50 shadow-xl scale-125">
+                                    Deal Hand
+                                </Button>
+                            ) : (
+                                <div className="bg-black/60 px-6 py-3 rounded-xl border border-white/10 backdrop-blur-md text-white/70 animate-pulse">
+                                    Waiting for Host to Deal...
+                                </div>
+                            )
                         ) : (
                             <div className="bg-red-500/20 px-6 py-3 rounded-xl border border-red-500/50 text-center backdrop-blur-md">
                                 <p className="text-white font-bold mb-2">Game Over</p>
-                                <Button size="sm" onClick={restartMatch}>Restart Match</Button>
+                                {isHost && <Button size="sm" onClick={restartMatch}>Restart Match</Button>}
                             </div>
                         )}
                     </div>
@@ -163,9 +192,13 @@ export const PokerTable: React.FC = () => {
                  {/* Next Hand Button (Showdown Phase) */}
                  {phase === GamePhase.SHOWDOWN && (
                     <div className="mt-4">
-                        <Button size="lg" onClick={startGame} className="shadow-2xl scale-110 bg-white text-black hover:bg-brand-yellow transition-colors">
-                            Next Hand
-                        </Button>
+                        {isHost ? (
+                            <Button size="lg" onClick={startGame} className="shadow-2xl scale-110 bg-white text-black hover:bg-brand-yellow transition-colors">
+                                Next Hand
+                            </Button>
+                        ) : (
+                             <div className="text-white/50 text-sm">Waiting for Next Hand...</div>
+                        )}
                     </div>
                 )}
              </div>
@@ -184,12 +217,13 @@ export const PokerTable: React.FC = () => {
                     <div key={player.id} className="absolute w-max z-20 pointer-events-none" style={style}>
                         <PlayerSpot 
                             player={player} 
-                            isCurrentUser={player.id === 'user'} 
+                            isCurrentUser={player.id === myId} 
                             isActivePlayer={currentPlayerId === player.id}
                             badge={badge}
                             isDealer={index === dealerIndex}
                             isWinner={winners.includes(player.id)}
                             showCards={phase === GamePhase.SHOWDOWN || userSettings.gameplay.allowCheats}
+                            turnExpiresAt={currentPlayerId === player.id ? turnExpiresAt : null}
                         />
                     </div>
                 );
