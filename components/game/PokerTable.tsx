@@ -191,13 +191,18 @@ export const PokerTable: React.FC = () => {
                 )}
                  {/* Next Hand Button (Showdown Phase) */}
                  {phase === GamePhase.SHOWDOWN && (
-                    <div className="mt-4">
+                    <div className="mt-4 flex space-x-4">
+                         <Button size="lg" variant="secondary" onClick={() => leaveGame()}>
+                            Leave Table
+                        </Button>
                         {isHost ? (
                             <Button size="lg" onClick={startGame} className="shadow-2xl scale-110 bg-white text-black hover:bg-brand-yellow transition-colors">
                                 Next Hand
                             </Button>
                         ) : (
-                             <div className="text-white/50 text-sm">Waiting for Next Hand...</div>
+                             <div className="text-white/50 text-sm flex items-center bg-black/40 px-3 py-2 rounded-lg backdrop-blur-md">
+                                 Waiting for Next Hand...
+                             </div>
                         )}
                     </div>
                 )}

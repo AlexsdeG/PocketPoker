@@ -237,6 +237,20 @@ export const useGameStore = create<State>()(
                   } else if (msg.type === 'GAME_START') {
                        get().receiveState(msg.payload);
                        set(s => { s.currentView = 'GAME' });
+                       
+                       // Client Side Buy-In Deduction
+                       const myId = get().networkState.myPeerId;
+                       // Need to cast payload as any or Player[] to avoid TS issues if not typed
+                       const players = msg.payload.players as Player[];
+                       const myPlayer = players.find(p => p.id === myId);
+                       if (myPlayer) {
+                           set(s => {
+                               const profile = s.userSettings.profiles.find(p => p.id === s.userSettings.activeProfileId);
+                               if (profile) {
+                                   profile.bankroll -= myPlayer.chips;
+                               }
+                           });
+                       }
                   } else if (msg.type === 'STATE_UPDATE') {
                        get().receiveState(msg.payload);
                   } else if (msg.type === 'HOST_DISCONNECT') {
@@ -306,6 +320,22 @@ export const useGameStore = create<State>()(
           const state = get();
           const net = NetworkManager.getInstance();
           
+          // Refund logic: Find local player and return chips to bankroll
+          const myId = state.networkState.isMultiplayer && state.networkState.myPeerId ? state.networkState.myPeerId : 'user';
+          const myPlayer = state.gameState.players.find(p => p.id === myId);
+          
+          if (myPlayer && !myPlayer.isBot) {
+              const profileId = state.userSettings.activeProfileId;
+              const profileIdx = state.userSettings.profiles.findIndex(p => p.id === profileId);
+              
+              if (profileIdx !== -1) {
+                   set(s => {
+                       // Direct mutation via immer
+                       s.userSettings.profiles[profileIdx].bankroll += myPlayer.chips;
+                   });
+              }
+          }
+
           if (state.networkState.isHost) {
               net.broadcast({ type: 'HOST_DISCONNECT', payload: {} });
               // Wait a moment for message to flush before killing connection
@@ -334,12 +364,33 @@ export const useGameStore = create<State>()(
       }),
 
       receiveState: (newState) => set(state => {
+          // Detect Restart (Session Hands went down)
+          if (newState.handsPlayedInSession < state.gameState.handsPlayedInSession) {
+               // Reconcile Bankroll: Cash out old stack, buy in new stack
+               // Logic: Bankroll += (OldChips - NewChips)
+               const myId = state.networkState.myPeerId;
+               const oldPlayer = state.gameState.players.find(p => p.id === myId);
+               const newPlayer = newState.players.find(p => p.id === myId);
+               
+               if (oldPlayer && newPlayer) {
+                   const profile = state.userSettings.profiles.find(p => p.id === state.userSettings.activeProfileId);
+                   if (profile) {
+                       profile.bankroll += (oldPlayer.chips - newPlayer.chips);
+                   }
+               }
+          }
           state.gameState = newState;
       }),
 
       initializeGame: (settings) => {
         set((state) => {
             const activeProfile = state.userSettings.profiles.find(p => p.id === state.userSettings.activeProfileId) || state.userSettings.profiles[0];
+            
+            // Deduct Buy-In from Bankroll (One-time)
+            if (activeProfile) {
+                activeProfile.bankroll -= settings.startingChips;
+            }
+
             const isHost = state.networkState.isHost;
             const isMultiplayer = state.networkState.isMultiplayer;
             const connectedPeers = state.networkState.connectedPeers;
@@ -430,8 +481,21 @@ export const useGameStore = create<State>()(
 
       restartMatch: () => set((state) => {
          const config = state.gameState.config;
+         
+         // Reconcile Bankroll for User before Resetting
+         // Logic: Bankroll += (CurrentStack - NewBuyIn)
+         // Equivalent to: Cashing out old stack, buying in new stack
+         const myId = state.networkState.isMultiplayer && state.networkState.myPeerId ? state.networkState.myPeerId : 'user';
+         const myPlayer = state.gameState.players.find(p => p.id === myId);
+         if (myPlayer && !myPlayer.isBot) {
+             const profile = state.userSettings.profiles.find(p => p.id === state.userSettings.activeProfileId);
+             if (profile) {
+                 profile.bankroll += (myPlayer.chips - config.startingChips);
+             }
+         }
+
          state.gameState.players.forEach(p => {
-             p.chips = config.startingChips; 
+             p.chips = config.startingChips;  
              p.holeCards = [];
              p.isActive = true;
              p.isAllIn = false;
@@ -483,11 +547,7 @@ export const useGameStore = create<State>()(
         const activeCount = state.gameState.players.filter(p => p.chips > 0).length;
         if (activeCount < 2) return;
 
-        const user = state.gameState.players.find(p => !p.isBot && !p.isRemote);
-        if (user) {
-            const profile = state.userSettings.profiles.find(p => p.id === state.userSettings.activeProfileId);
-            if (profile) profile.bankroll -= user.chips;
-        }
+        // Removed per-hand bankroll deduction (Moved to initializeGame)
 
         state.gameState.pot = 0;
         state.gameState.sidePots = [];
@@ -832,7 +892,7 @@ function distributePotAndSync(state: State) {
     const user = players.find(p => p.id === 'user' || (state.networkState.isMultiplayer && p.id === state.networkState.myPeerId));
     const profile = state.userSettings.profiles.find(p => p.id === state.userSettings.activeProfileId);
     if (user && profile && !user.isBot) {
-        profile.bankroll += user.chips;
+        // Removed per-hand bankroll addition (Only happens on leaveGame now)
         profile.handsPlayed++;
         if (winners.includes(user.id)) profile.handsWon++;
     }
