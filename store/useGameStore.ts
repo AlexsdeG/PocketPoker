@@ -40,6 +40,7 @@ interface State {
   receiveState: (state: GameState) => void;
   broadcastAction: (action: PlayerActionType, amount?: number) => void;
   leaveGame: () => Promise<void>;
+  deleteProfile: (id: string) => void;
 }
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -144,7 +145,10 @@ export const useGameStore = create<State>()(
             avatarId,
             bankroll: 10000,
             handsPlayed: 0,
-            handsWon: 0
+            handsWon: 0,
+            bestSessionWin: 0,
+            worstSessionLoss: 0,
+            biggestPotWon: 0
         };
         state.userSettings.profiles.push(newProfile);
         state.userSettings.activeProfileId = newProfile.id;
@@ -166,6 +170,20 @@ export const useGameStore = create<State>()(
             if (data.bankroll !== undefined) profile.bankroll = data.bankroll;
             if (data.handsPlayed !== undefined) profile.handsPlayed = data.handsPlayed;
             if (data.handsWon !== undefined) profile.handsWon = data.handsWon;
+            if (data.bestSessionWin !== undefined) profile.bestSessionWin = data.bestSessionWin;
+            if (data.worstSessionLoss !== undefined) profile.worstSessionLoss = data.worstSessionLoss;
+            if (data.biggestPotWon !== undefined) profile.biggestPotWon = data.biggestPotWon;
+        }
+      }),
+
+      deleteProfile: (id) => set((state) => {
+        if (state.userSettings.profiles.length <= 1) return; // Prevent deleting last profile
+        
+        state.userSettings.profiles = state.userSettings.profiles.filter(p => p.id !== id);
+        
+        // If we deleted the active profile, switch to the first available one
+        if (state.userSettings.activeProfileId === id) {
+            state.userSettings.activeProfileId = state.userSettings.profiles[0].id;
         }
       }),
 
@@ -331,7 +349,20 @@ export const useGameStore = create<State>()(
               if (profileIdx !== -1) {
                    set(s => {
                        // Direct mutation via immer
+                       const profit = myPlayer.chips - state.gameState.config.startingChips;
                        s.userSettings.profiles[profileIdx].bankroll += myPlayer.chips;
+                       
+                       // Stat Tracking
+                       if (profit > 0) {
+                           if (!s.userSettings.profiles[profileIdx].bestSessionWin || profit > s.userSettings.profiles[profileIdx].bestSessionWin!) {
+                               s.userSettings.profiles[profileIdx].bestSessionWin = profit;
+                           }
+                       } else if (profit < 0) {
+                           const loss = Math.abs(profit);
+                           if (!s.userSettings.profiles[profileIdx].worstSessionLoss || loss > s.userSettings.profiles[profileIdx].worstSessionLoss!) {
+                               s.userSettings.profiles[profileIdx].worstSessionLoss = loss;
+                           }
+                       }
                    });
               }
           }
@@ -375,7 +406,20 @@ export const useGameStore = create<State>()(
                if (oldPlayer && newPlayer) {
                    const profile = state.userSettings.profiles.find(p => p.id === state.userSettings.activeProfileId);
                    if (profile) {
-                       profile.bankroll += (oldPlayer.chips - newPlayer.chips);
+                       const profit = oldPlayer.chips - newPlayer.chips;
+                       profile.bankroll += profit;
+
+                        // Stat Tracking
+                       if (profit > 0) {
+                           if (!profile.bestSessionWin || profit > profile.bestSessionWin) {
+                               profile.bestSessionWin = profit;
+                           }
+                       } else if (profit < 0) {
+                           const loss = Math.abs(profit);
+                           if (!profile.worstSessionLoss || loss > profile.worstSessionLoss) {
+                               profile.worstSessionLoss = loss;
+                           }
+                       }
                    }
                }
           }
@@ -490,7 +534,20 @@ export const useGameStore = create<State>()(
          if (myPlayer && !myPlayer.isBot) {
              const profile = state.userSettings.profiles.find(p => p.id === state.userSettings.activeProfileId);
              if (profile) {
-                 profile.bankroll += (myPlayer.chips - config.startingChips);
+                 const profit = myPlayer.chips - config.startingChips;
+                 profile.bankroll += profit;
+                 
+                  // Stat Tracking
+                 if (profit > 0) {
+                     if (!profile.bestSessionWin || profit > profile.bestSessionWin) {
+                         profile.bestSessionWin = profit;
+                     }
+                 } else if (profit < 0) {
+                     const loss = Math.abs(profit);
+                     if (!profile.worstSessionLoss || loss > profile.worstSessionLoss) {
+                         profile.worstSessionLoss = loss;
+                     }
+                 }
              }
          }
 
@@ -894,7 +951,13 @@ function distributePotAndSync(state: State) {
     if (user && profile && !user.isBot) {
         // Removed per-hand bankroll addition (Only happens on leaveGame now)
         profile.handsPlayed++;
-        if (winners.includes(user.id)) profile.handsWon++;
+        if (winners.includes(user.id)) {
+            profile.handsWon++;
+            // Update Biggest Pot (ensure we use the total pot size)
+            if (!profile.biggestPotWon || pot > profile.biggestPotWon) {
+                 profile.biggestPotWon = pot;
+            }
+        }
     }
 }
 

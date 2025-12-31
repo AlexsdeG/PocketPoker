@@ -5,7 +5,7 @@ import { Card } from '../Card';
 import { ArrowLeft, Plus, Check, Upload, Trash, RotateCcw } from 'lucide-react';
 
 export const ProfileManager: React.FC = () => {
-  const { userSettings, setView, addProfile, setActiveProfile, updateActiveProfile } = useGameStore();
+  const { userSettings, setView, addProfile, setActiveProfile, updateActiveProfile, deleteProfile } = useGameStore();
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +40,32 @@ export const ProfileManager: React.FC = () => {
   }
 
   const handleResetBankroll = () => {
-      updateActiveProfile({ bankroll: 10000 });
+      if (window.confirm("Are you sure? This will reset your bankroll and ALL career statistics to zero. This cannot be undone.")) {
+          updateActiveProfile({ 
+              bankroll: 10000,
+              bestSessionWin: 0,
+              worstSessionLoss: 0,
+              biggestPotWon: 0,
+              handsPlayed: 0,
+              handsWon: 0
+          });
+      }
+  };
+
+  const handleDeleteProfile = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation(); // Prevent selecting the profile while deleting
+      if (userSettings.profiles.length <= 1) {
+          alert("You cannot delete the only profile.");
+          return;
+      }
+      if (window.confirm("Are you sure you want to delete this profile? This cannot be undone.")) {
+          deleteProfile(id);
+      }
+  };
+
+  const calculateWinRate = () => {
+      if (!activeProfile || !activeProfile.handsPlayed) return "0%";
+      return `${Math.round((activeProfile.handsWon / activeProfile.handsPlayed) * 100)}%`;
   };
 
   return (
@@ -106,12 +131,39 @@ export const ProfileManager: React.FC = () => {
                                 size="icon"
                                 onClick={handleResetBankroll}
                                 className="text-white/50 hover:text-white transition-colors h-6 w-6"
-                                title="Reset to $10,000"
+                                title="Reset Profile"
                             >
                                 <RotateCcw size={14} />
                             </Button>
                         </div>
                         <span className="text-green-400 font-mono text-xl font-bold">${activeProfile.bankroll.toLocaleString()}</span>
+                    </div>
+                </div>
+
+                {/* Statistics Card */}
+                <div className="bg-black/20 p-4 rounded-xl space-y-3">
+                    <h3 className="text-xs uppercase text-white/40 font-bold tracking-wider mb-2">Career Statistics</h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-black/40 p-3 rounded-lg border border-white/5">
+                            <span className="text-xs text-white/50 block mb-1">Win Rate</span>
+                            <span className="text-xl font-mono text-brand-yellow">{calculateWinRate()}</span>
+                            <div className="text-[10px] text-white/30 mt-1">
+                                {activeProfile.handsWon} Won / {activeProfile.handsPlayed} Played
+                            </div>
+                        </div>
+                        <div className="bg-black/40 p-3 rounded-lg border border-white/5">
+                            <span className="text-xs text-white/50 block mb-1">Biggest Pot</span>
+                            <span className="text-xl font-mono text-blue-400">${(activeProfile.biggestPotWon || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="bg-black/40 p-3 rounded-lg border border-white/5">
+                            <span className="text-xs text-white/50 block mb-1">Best Session</span>
+                            <span className="text-xl font-mono text-green-400">+${(activeProfile.bestSessionWin || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="bg-black/40 p-3 rounded-lg border border-white/5">
+                            <span className="text-xs text-white/50 block mb-1">Worst Session</span>
+                            <span className="text-xl font-mono text-red-400">-${(activeProfile.worstSessionLoss || 0).toLocaleString()}</span>
+                        </div>
                     </div>
                 </div>
             </Card>
@@ -136,7 +188,20 @@ export const ProfileManager: React.FC = () => {
                         </div>
                         <span className="font-medium">{p.username}</span>
                     </div>
-                    {p.id === userSettings.activeProfileId && <Check size={18} className="text-brand-blue" />}
+                    <div className="flex items-center space-x-2">
+                        {p.id === userSettings.activeProfileId && <Check size={18} className="text-brand-blue" />}
+                        {userSettings.profiles.length > 1 && (
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-white/20 hover:text-red-400 hover:bg-white/5"
+                                onClick={(e) => handleDeleteProfile(p.id, e)}
+                                title="Delete Profile"
+                            >
+                                <Trash size={14} />
+                            </Button>
+                        )}
+                    </div>
                 </div>
             ))}
             

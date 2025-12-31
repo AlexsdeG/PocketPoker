@@ -56,6 +56,9 @@ export interface UserProfile {
   bankroll: number;
   handsWon: number;
   handsPlayed: number;
+  bestSessionWin?: number;    // Max profit in a single session
+  worstSessionLoss?: number;  // Max loss in a single session
+  biggestPotWon?: number;     // Largest pot won
 }
 
 export interface BotConfig {
