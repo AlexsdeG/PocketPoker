@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [0.4.0] - 2025-12-31
+### Added
+- **Playstyle:** Playstyle types for bots and ai
+- 
+
 ## [0.3.0] - 2024-05-24
 ### Added
 - **Multiplayer (P2P):**

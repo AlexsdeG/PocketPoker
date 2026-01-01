@@ -109,7 +109,7 @@ const App: React.FC = () => {
             {/* Status Footer */}
             <div className="text-center">
                 <p className="text-xs text-white/30">
-                    v0.3.0 (Multiplayer)
+                    v0.4.0 (Playstyle)
                 </p>
             </div>
         </div>
