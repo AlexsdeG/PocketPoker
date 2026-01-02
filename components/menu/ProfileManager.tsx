@@ -74,7 +74,7 @@ export const ProfileManager: React.FC = () => {
       <div className="absolute inset-0 opacity-20 pointer-events-none" 
            style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
 
-      <div className="max-w-md w-full mx-auto space-y-6 backdrop-blur-sm z-10">
+      <div className="max-w-md w-full mx-auto space-y-6 backdrop-blur-sm z-10 py-10">
         
         <div className="flex items-center space-x-4">
           <Button variant="ghost" size="icon" onClick={() => setView('MENU')}>
