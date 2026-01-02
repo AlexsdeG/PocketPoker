@@ -170,11 +170,11 @@ export const GameSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-felt-dark flex flex-col p-4 text-white overflow-y-auto relative">
+    <div className="min-h-screen w-full bg-felt-dark flex flex-col py-4 text-white overflow-y-auto relative">
       <div className="absolute inset-0 opacity-20 pointer-events-none" 
            style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
 
-      <div className="max-w-lg w-full mx-auto space-y-6 px-4 pb-20 z-10 overflow-x-auto">
+      <div className="max-w-lg w-full mx-auto space-y-6 px-4 py-10 z-10 overflow-x-auto">
         
         {/* Header */}
         <div className="flex items-center space-x-4">

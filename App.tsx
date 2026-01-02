@@ -37,7 +37,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-full bg-felt-dark flex flex-col items-center justify-center p-4 md:p-0 font-sans text-white overflow-hidden relative">
+    <div className="h-[100dvh] w-full bg-felt-dark flex flex-col items-center justify-center p-0 font-sans text-white overflow-hidden relative">
       {/* Background Texture Overlay */}
       <div className="absolute inset-0 opacity-20 pointer-events-none" 
            style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
@@ -55,7 +55,7 @@ const App: React.FC = () => {
       {currentView === 'ACADEMY' && <AcademyModal onClose={() => setView('MENU')} isOverlay={false} />}
 
       {currentView === 'MENU' && (
-        <div className="max-w-md w-full z-10 space-y-8">
+        <div className="max-w-md w-full z-10 space-y-8 px-4">
             {/* Header / Branding */}
             <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center p-4 bg-surface-dark rounded-2xl shadow-2xl glass-panel mb-4">

@@ -15,6 +15,14 @@ export const PokerTable: React.FC = () => {
   const { gameState, setView, startGame, restartMatch, playerAction, userSettings, networkState, handleTurnTimeout, leaveGame } = useGameStore();
   const { players, communityCards, pot, currentPlayerId, phase, winners, dealerIndex, turnExpiresAt } = gameState;
   const [showAcademy, setShowAcademy] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+      const checkMobile = () => setIsMobile(window.innerWidth < 768);
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   const isHost = networkState.isHost || !networkState.isMultiplayer;
 
@@ -73,7 +81,11 @@ export const PokerTable: React.FC = () => {
     
     if (relativeIndex === 0) {
         // User always at bottom center
-        return { bottom: '4%', left: '50%', transform: 'translate(-50%, 0)' };
+        return { 
+            bottom: isMobile ? '14%' : '4%', 
+            left: '50%', 
+            transform: 'translate(-50%, 0)' 
+        };
     }
 
     // Spread others from angle 170 (Left) to 370 (Right)
@@ -81,9 +93,9 @@ export const PokerTable: React.FC = () => {
     const angleDeg = 190 + (angleStep * relativeIndex); // Start a bit lower
     const angleRad = (angleDeg * Math.PI) / 180;
     
-    // Oval Radius - Slightly increased spacing
-    const radiusX = 48; // %
-    const radiusY = 42; // %
+    // Oval Radius - Adaptive to screen size
+    const radiusX = isMobile ? 42 : 48; // Increased X to spread side-to-side
+    const radiusY = isMobile ? 34 : 42; // Decreased Y to flatten/pull top bots down
 
     const left = 50 + radiusX * Math.cos(angleRad);
     const top = 48 + radiusY * Math.sin(angleRad);
@@ -98,30 +110,30 @@ export const PokerTable: React.FC = () => {
   // Find winning hand result to highlight community cards
   const winnerId = winners[0];
   const winnerPlayer = players.find(p => p.id === winnerId);
-  const winningCards = phase === GamePhase.SHOWDOWN ? winnerPlayer?.handResult?.winningCards : [];
+  const winningCards = winnerPlayer?.handResult?.winningCards || [];
 
   return (
-    <div className="relative w-full h-screen bg-felt-dark overflow-hidden flex flex-col">
+    <div className="relative w-full h-[100dvh] bg-felt-dark overflow-hidden flex flex-col">
       
       {showAcademy && <AcademyModal onClose={() => setShowAcademy(false)} isOverlay={true} />}
 
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10 pointer-events-none">
-        <Button variant="ghost" size="icon" className="pointer-events-auto" onClick={() => leaveGame()}>
+      <div className="absolute top-0 left-0 right-0 p-2 md:p-4 flex justify-between items-start z-10 pointer-events-none">
+        <Button variant="ghost" size="icon" className="pointer-events-auto scale-90 md:scale-100" onClick={() => leaveGame()}>
             <ArrowLeft />
         </Button>
-        <div className="glass-panel px-4 py-2 rounded-full text-xs font-mono text-white/60">
+        <div className="glass-panel px-3 py-1 md:px-4 md:py-2 rounded-full text-[10px] md:text-xs font-mono text-white/60">
             Phase: {phase}
         </div>
-        <Button variant="ghost" size="icon" className="pointer-events-auto" onClick={restartMatch}>
+        <Button variant="ghost" size="icon" className="pointer-events-auto scale-90 md:scale-100" onClick={restartMatch}>
             <RefreshCw size={18} />
         </Button>
       </div>
 
       {/* Academy Trigger */}
-      <div className="absolute bottom-28 left-4 z-20">
+      <div className="absolute bottom-20 md:bottom-28 left-2 md:left-4 z-20">
          <Button variant="ghost" size="icon" onClick={() => setShowAcademy(true)}>
-             <HelpCircle className="w-6 h-6" />
+             <HelpCircle className="w-5 h-5 md:w-6 md:h-6" />
          </Button>
       </div>
 
@@ -131,18 +143,18 @@ export const PokerTable: React.FC = () => {
       {/* Table Surface */}
       <div className="flex-1 flex flex-col items-center justify-center relative">
         {/* Felt Texture */}
-        <div className="absolute inset-4 md:inset-12 bg-felt rounded-[10rem] shadow-[inset_0_0_80px_rgba(0,0,0,0.5)] border-[16px] border-[#1a1a1a] flex flex-col">
+        <div className="absolute inset-0 md:inset-12 bg-felt rounded-[3rem] md:rounded-[10rem] shadow-[inset_0_0_80px_rgba(0,0,0,0.5)] border-[8px] md:border-[16px] border-[#1a1a1a] flex flex-col transition-all duration-300">
             
             {/* Center Area (Community Cards & Pot) */}
-            <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center space-y-6 w-full z-10">
+            <div className="absolute top-[60%] md:top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center space-y-4 md:space-y-6 w-full z-10">
                 
                 {/* Pot */}
-                <div className="bg-black/40 px-8 py-3 rounded-full text-brand-yellow font-bold text-2xl tracking-wider shadow-xl border border-white/5 backdrop-blur-md">
+                <div className="bg-black/40 px-6 py-2 md:px-8 md:py-3 rounded-full text-brand-yellow font-bold text-lg md:text-2xl tracking-wider shadow-xl border border-white/5 backdrop-blur-md">
                     POT: ${pot.toLocaleString()}
                 </div>
 
                 {/* Community Cards */}
-                <div className="flex space-x-2 sm:space-x-3 h-24 sm:h-32">
+                <div className="flex space-x-1 sm:space-x-3 h-20 sm:h-32">
                      {communityCards.map((card, idx) => {
                          const cardId = `${card.rank}${card.suit}`;
                          const isWinning = winningCards?.includes(cardId);
@@ -150,7 +162,7 @@ export const PokerTable: React.FC = () => {
                             <PlayingCard 
                                 key={idx} 
                                 card={card} 
-                                className={isWinning ? 'ring-4 ring-brand-yellow shadow-[0_0_30px_rgba(255,204,0,0.8)] scale-110 z-20' : ''}
+                                className={isWinning ? 'ring-2 md:ring-4 ring-brand-yellow shadow-[0_0_30px_rgba(255,204,0,0.8)] scale-110 z-20' : ''}
                             />
                          );
                      })}
@@ -158,10 +170,10 @@ export const PokerTable: React.FC = () => {
             </div>
 
              {/* Game Over / Next Hand Messages (High Z-Index) */}
-             <div className="absolute top-[60%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col items-center space-y-4 pointer-events-auto">
+             <div className="absolute top-[50%] md:top-[60%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col items-center space-y-4 pointer-events-auto">
                 {/* Winner Announcement */}
                 {phase === GamePhase.SHOWDOWN && winners.length > 0 && (
-                    <div className="bg-brand-yellow text-black font-extrabold px-10 py-4 rounded-full shadow-2xl animate-bounce whitespace-nowrap text-xl border-4 border-white/20">
+                    <div className="bg-brand-yellow text-black font-extrabold px-6 py-3 md:px-10 md:py-4 rounded-full shadow-2xl animate-bounce whitespace-nowrap text-lg md:text-xl border-4 border-white/20">
                         {winners.length === 1 
                             ? `${players.find(p => p.id === winners[0])?.name} Wins!` 
                             : 'Split Pot!'}
@@ -173,11 +185,11 @@ export const PokerTable: React.FC = () => {
                     <div className="animate-in fade-in zoom-in duration-300">
                         {players.filter(p => p.chips > 0).length > 1 ? (
                             isHost ? (
-                                <Button size="lg" onClick={startGame} className="animate-pulse shadow-brand-blue/50 shadow-xl scale-125">
+                                <Button size="lg" onClick={startGame} className="animate-pulse shadow-brand-blue/50 shadow-xl scale-110 md:scale-125">
                                     Deal Hand
                                 </Button>
                             ) : (
-                                <div className="bg-black/60 px-6 py-3 rounded-xl border border-white/10 backdrop-blur-md text-white/70 animate-pulse">
+                                <div className="bg-black/60 px-6 py-3 rounded-xl border border-white/10 backdrop-blur-md text-white/70 animate-pulse text-sm md:text-base">
                                     Waiting for Host to Deal...
                                 </div>
                             )
@@ -191,16 +203,16 @@ export const PokerTable: React.FC = () => {
                 )}
                  {/* Next Hand Button (Showdown Phase) */}
                  {phase === GamePhase.SHOWDOWN && (
-                    <div className="mt-4 flex space-x-4">
+                    <div className="mt-4 flex space-x-2 md:space-x-4">
                          <Button size="lg" variant="secondary" onClick={() => leaveGame()}>
                             Leave Table
                         </Button>
                         {isHost ? (
-                            <Button size="lg" onClick={startGame} className="shadow-2xl scale-110 bg-white text-black hover:bg-brand-yellow transition-colors">
+                            <Button size="lg" onClick={startGame} className="shadow-2xl scale-100 md:scale-110 bg-white text-black hover:bg-brand-yellow transition-colors">
                                 Next Hand
                             </Button>
                         ) : (
-                             <div className="text-white/50 text-sm flex items-center bg-black/40 px-3 py-2 rounded-lg backdrop-blur-md">
+                             <div className="text-white/50 text-xs md:text-sm flex items-center bg-black/40 px-3 py-2 rounded-lg backdrop-blur-md">
                                  Waiting for Next Hand...
                              </div>
                         )}
