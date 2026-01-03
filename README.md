@@ -1,10 +1,12 @@
 # Pocket Poker PWA ♠️
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Click_Here-blue?style=for-the-badge)](https://pocketpoker.pro-grammer.de/)
+
 A design-first, privacy-focused Texas Hold'em Poker Progressive Web App (PWA). Play solo against bots or host peer-to-peer multiplayer games with friends, all directly in your browser without a backend server.
 
 ![App Screenshot](https://github.com/AlexsdeG/PocketPoker/blob/main/imgs/poker2.png)
 
-## ✨ Features
+## ✨ Features **([Demo](https://pocketpoker.pro-grammer.de/))**
 
 ### 🎮 Gameplay
 - **No Limit Texas Hold'em**: Full implementation of standard rules.
