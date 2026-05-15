@@ -18,7 +18,7 @@ import { BotMood, BotPersona, BotPlayStyle } from '../types';
  */
 export const PROFILE_LIBRARY: Record<Exclude<BotPlayStyle, BotPlayStyle.RANDOM>, BotPersona> = {
   [BotPlayStyle.TAG]: {
-    aggression: 0.55, tightness: 0.70, bluffFrequency: 0.18,
+    aggression: 0.55, tightness: 0.62, bluffFrequency: 0.18,
     callStation: 0.15, trapping: 0.20, adaptability: 0.65,
     tiltResistance: 0.75, thinkMsBase: 1500, thinkMsJitter: 600,
   },
@@ -28,12 +28,12 @@ export const PROFILE_LIBRARY: Record<Exclude<BotPlayStyle, BotPlayStyle.RANDOM>,
     tiltResistance: 0.55, thinkMsBase: 1300, thinkMsJitter: 700,
   },
   [BotPlayStyle.NIT]: {
-    aggression: 0.20, tightness: 0.85, bluffFrequency: 0.05,
+    aggression: 0.20, tightness: 0.72, bluffFrequency: 0.05,
     callStation: 0.30, trapping: 0.10, adaptability: 0.40,
     tiltResistance: 0.80, thinkMsBase: 1700, thinkMsJitter: 500,
   },
   [BotPlayStyle.ROCK]: {
-    aggression: 0.15, tightness: 0.95, bluffFrequency: 0.02,
+    aggression: 0.15, tightness: 0.82, bluffFrequency: 0.02,
     callStation: 0.20, trapping: 0.05, adaptability: 0.30,
     tiltResistance: 0.90, thinkMsBase: 1800, thinkMsJitter: 400,
   },
@@ -64,7 +64,7 @@ export const PROFILE_LIBRARY: Record<Exclude<BotPlayStyle, BotPlayStyle.RANDOM>,
     tiltResistance: 0.55, thinkMsBase: 1300, thinkMsJitter: 700,
   },
   [BotPlayStyle.PASSIVE]: {
-    aggression: 0.20, tightness: 0.85, bluffFrequency: 0.05,
+    aggression: 0.20, tightness: 0.72, bluffFrequency: 0.05,
     callStation: 0.30, trapping: 0.10, adaptability: 0.40,
     tiltResistance: 0.80, thinkMsBase: 1700, thinkMsJitter: 500,
   },
@@ -119,7 +119,7 @@ function pickMood(): BotMood {
  * doesn't just thrash). Different every hand.
  */
 function randomBasePersona(): BotPersona {
-  const u = () => 0.20 + rand() * 0.60;
+  const u = () => 0.15 + rand() * 0.50; // tightness upper bound 0.65 (was 0.80)
   return {
     aggression: u(),
     tightness: u(),

@@ -51,7 +51,8 @@ export const GameSetup: React.FC = () => {
   );
   
   const [editBotId, setEditBotId] = useState<string | null>(null);
-  const [playStyleOpenFor, setPlayStyleOpenFor] = useState<string | null>(null);
+  // Fixed-position anchor so the dropdown escapes Card's overflow-hidden.
+  const [playStyleMenu, setPlayStyleMenu] = useState<{ id: string; top: number; right: number } | null>(null);
 
   // Profile metadata for the dropdown picker (icon + label + tagline).
   const PROFILE_META: Record<BotPlayStyle, { label: string; tag: string; Icon: React.ComponentType<any>; color: string }> = {
@@ -386,47 +387,23 @@ export const GameSetup: React.FC = () => {
                                                 const currentStyle = (settings.botConfigs[id]?.playStyle as BotPlayStyle) || BotPlayStyle.RANDOM;
                                                 const meta = PROFILE_META[currentStyle] || PROFILE_META[BotPlayStyle.RANDOM];
                                                 const CurIcon = meta.Icon;
-                                                const open = playStyleOpenFor === id;
+                                                const open = playStyleMenu?.id === id;
                                                 return (
                                                     <div className="relative">
                                                         <button
-                                                            onClick={() => setPlayStyleOpenFor(open ? null : id)}
+                                                            onClick={(e) => {
+                                                                if (open) {
+                                                                    setPlayStyleMenu(null);
+                                                                } else {
+                                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                                    setPlayStyleMenu({ id, top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                                                }
+                                                            }}
                                                             className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
                                                             title={`Profile: ${meta.label} — ${meta.tag}`}
                                                         >
                                                             <CurIcon size={12} className={meta.color} />
                                                         </button>
-                                                        {open && (
-                                                            <>
-                                                                <div className="fixed inset-0 z-40" onClick={() => setPlayStyleOpenFor(null)} />
-                                                                <div className="absolute right-0 mt-1 z-50 w-56 bg-zinc-900 border border-white/10 rounded-lg shadow-xl p-1">
-                                                                    <div className="px-2 py-1 text-[10px] text-white/40 uppercase tracking-wider">
-                                                                        Profiles are subtle — bots vary each hand
-                                                                    </div>
-                                                                    {PROFILE_ORDER.map(style => {
-                                                                        const m = PROFILE_META[style];
-                                                                        const Ico = m.Icon;
-                                                                        const selected = currentStyle === style
-                                                                            || (style === BotPlayStyle.LAG && currentStyle === BotPlayStyle.AGGRESSIVE)
-                                                                            || (style === BotPlayStyle.NIT && currentStyle === BotPlayStyle.PASSIVE);
-                                                                        return (
-                                                                            <button
-                                                                                key={style}
-                                                                                onClick={() => { updateBotConfig(id, 'playStyle', style); setPlayStyleOpenFor(null); }}
-                                                                                className={`w-full flex items-center px-2 py-1.5 rounded text-left text-xs transition-colors ${selected ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5'}`}
-                                                                            >
-                                                                                <Ico size={14} className={`mr-2 ${m.color}`} />
-                                                                                <div className="flex-1">
-                                                                                    <div className="font-semibold leading-tight">{m.label}</div>
-                                                                                    <div className="text-[10px] text-white/40 leading-tight">{m.tag}</div>
-                                                                                </div>
-                                                                                {selected && <Check size={12} className="text-emerald-400 ml-1" />}
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </>
-                                                        )}
                                                     </div>
                                                 );
                                             })()}
@@ -560,6 +537,47 @@ export const GameSetup: React.FC = () => {
         )}
 
       </div>
+
+      {/* Fixed-position profile dropdown — renders outside Card's overflow-hidden */}
+      {playStyleMenu && (() => {
+        const { id, top, right } = playStyleMenu;
+        const currentStyle = (settings.botConfigs[id]?.playStyle as BotPlayStyle) || BotPlayStyle.RANDOM;
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setPlayStyleMenu(null)} />
+            <div
+              className="fixed z-50 w-56 bg-zinc-900 border border-white/10 rounded-lg shadow-2xl p-1"
+              style={{ top, right }}
+            >
+              <div className="px-2 py-1 text-[10px] text-white/40 uppercase tracking-wider">
+                Profiles are subtle — bots vary each hand
+              </div>
+              {PROFILE_ORDER.map(style => {
+                const m = PROFILE_META[style];
+                const Ico = m.Icon;
+                const selected = currentStyle === style
+                  || (style === BotPlayStyle.LAG && currentStyle === BotPlayStyle.AGGRESSIVE)
+                  || (style === BotPlayStyle.NIT && currentStyle === BotPlayStyle.PASSIVE);
+                return (
+                  <button
+                    key={style}
+                    onClick={() => { updateBotConfig(id, 'playStyle', style); setPlayStyleMenu(null); }}
+                    className={`w-full flex items-center px-2 py-1.5 rounded text-left text-xs transition-colors ${selected ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5'}`}
+                  >
+                    <Ico size={14} className={`mr-2 ${m.color}`} />
+                    <div className="flex-1">
+                      <div className="font-semibold leading-tight">{m.label}</div>
+                      <div className="text-[10px] text-white/40 leading-tight">{m.tag}</div>
+                    </div>
+                    {selected && <Check size={12} className="text-emerald-400 ml-1" />}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        );
+      })()}
+
     </div>
   );
 };
