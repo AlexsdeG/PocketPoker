@@ -3,7 +3,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { BotDifficulty, DeckType, GameSettings, BotConfig, BotPlayStyle } from '../../types';
-import { ArrowLeft, Users, Coins, Brain, ArrowUp, ArrowDown, Settings as SettingsIcon, Edit2, Sparkles, Copy, Share2, Wifi, Calculator, Check, Clock, Dice5, Zap, Shield, Ghost } from 'lucide-react';
+import { ArrowLeft, Users, Coins, Brain, ArrowUp, ArrowDown, Settings as SettingsIcon, Edit2, Sparkles, Copy, Share2, Wifi, Calculator, Check, Clock, Dice5, Zap, Shield, Ghost, Target, Flame, Mountain, PhoneCall, Skull } from 'lucide-react';
 
 export const GameSetup: React.FC = () => {
   const { setView, initializeGame, userSettings, toggleSetting, networkState, currentView, updateLobbySettings, leaveGame } = useGameStore();
@@ -51,6 +51,34 @@ export const GameSetup: React.FC = () => {
   );
   
   const [editBotId, setEditBotId] = useState<string | null>(null);
+  const [playStyleOpenFor, setPlayStyleOpenFor] = useState<string | null>(null);
+
+  // Profile metadata for the dropdown picker (icon + label + tagline).
+  const PROFILE_META: Record<BotPlayStyle, { label: string; tag: string; Icon: React.ComponentType<any>; color: string }> = {
+    [BotPlayStyle.RANDOM]:          { label: 'Random',           tag: 'Fresh persona every hand',        Icon: Dice5,     color: 'text-white/70' },
+    [BotPlayStyle.TAG]:             { label: 'TAG',              tag: 'Tight and assertive',             Icon: Target,    color: 'text-emerald-400' },
+    [BotPlayStyle.LAG]:             { label: 'LAG',              tag: 'Loose and aggressive',            Icon: Flame,     color: 'text-orange-400' },
+    [BotPlayStyle.NIT]:             { label: 'Nit',              tag: 'Tight, rarely raises',            Icon: Shield,    color: 'text-sky-400' },
+    [BotPlayStyle.ROCK]:            { label: 'Rock',             tag: 'Only plays premiums',             Icon: Mountain,  color: 'text-slate-300' },
+    [BotPlayStyle.CALLING_STATION]: { label: 'Calling Station',  tag: 'Calls way too much',              Icon: PhoneCall, color: 'text-yellow-300' },
+    [BotPlayStyle.MANIAC]:          { label: 'Maniac',           tag: 'Bluffs and raises constantly',    Icon: Skull,     color: 'text-red-400' },
+    [BotPlayStyle.SCHLITZOHR]:      { label: 'Trickster',        tag: 'Traps and floats',                Icon: Ghost,     color: 'text-purple-400' },
+    [BotPlayStyle.WILD_CARD]:       { label: 'Wild Card',        tag: 'High variance, unpredictable',    Icon: Sparkles,  color: 'text-pink-400' },
+    // Legacy aliases — UI relabels them, BotLogic maps them onto LAG / NIT internally.
+    [BotPlayStyle.AGGRESSIVE]:      { label: 'LAG',              tag: 'Loose and aggressive',            Icon: Flame,     color: 'text-orange-400' },
+    [BotPlayStyle.PASSIVE]:         { label: 'Nit',              tag: 'Tight, rarely raises',            Icon: Shield,    color: 'text-sky-400' },
+  };
+  const PROFILE_ORDER: BotPlayStyle[] = [
+    BotPlayStyle.RANDOM,
+    BotPlayStyle.TAG,
+    BotPlayStyle.LAG,
+    BotPlayStyle.NIT,
+    BotPlayStyle.ROCK,
+    BotPlayStyle.CALLING_STATION,
+    BotPlayStyle.MANIAC,
+    BotPlayStyle.SCHLITZOHR,
+    BotPlayStyle.WILD_CARD,
+  ];
 
   // Sync with Store's Lobby Settings (from Host)
   useEffect(() => {
@@ -354,23 +382,54 @@ export const GameSetup: React.FC = () => {
                                             </Button>
                                             
                                             {/* Playstyle Selector */}
-                                            {isBot && !isClient && (
-                                                <button 
-                                                    onClick={() => {
-                                                        const styles = Object.values(BotPlayStyle);
-                                                        const current = settings.botConfigs[id]?.playStyle || BotPlayStyle.RANDOM;
-                                                        const nextIdx = (styles.indexOf(current) + 1) % styles.length;
-                                                        updateBotConfig(id, 'playStyle', styles[nextIdx]);
-                                                    }}
-                                                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-                                                    title={`Playstyle: ${settings.botConfigs[id]?.playStyle || 'RANDOM'}`}
-                                                >
-                                                    {(!settings.botConfigs[id]?.playStyle || settings.botConfigs[id]?.playStyle === 'RANDOM') && <Dice5 size={12} />}
-                                                    {settings.botConfigs[id]?.playStyle === 'AGGRESSIVE' && <Zap size={12} className="text-orange-400" />}
-                                                    {settings.botConfigs[id]?.playStyle === 'PASSIVE' && <Shield size={12} className="text-blue-400" />}
-                                                    {settings.botConfigs[id]?.playStyle === 'SCHLITZOHR' && <Ghost size={12} className="text-purple-400" />}
-                                                </button>
-                                            )}
+                                            {isBot && !isClient && (() => {
+                                                const currentStyle = (settings.botConfigs[id]?.playStyle as BotPlayStyle) || BotPlayStyle.RANDOM;
+                                                const meta = PROFILE_META[currentStyle] || PROFILE_META[BotPlayStyle.RANDOM];
+                                                const CurIcon = meta.Icon;
+                                                const open = playStyleOpenFor === id;
+                                                return (
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={() => setPlayStyleOpenFor(open ? null : id)}
+                                                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                                                            title={`Profile: ${meta.label} — ${meta.tag}`}
+                                                        >
+                                                            <CurIcon size={12} className={meta.color} />
+                                                        </button>
+                                                        {open && (
+                                                            <>
+                                                                <div className="fixed inset-0 z-40" onClick={() => setPlayStyleOpenFor(null)} />
+                                                                <div className="absolute right-0 mt-1 z-50 w-56 bg-zinc-900 border border-white/10 rounded-lg shadow-xl p-1">
+                                                                    <div className="px-2 py-1 text-[10px] text-white/40 uppercase tracking-wider">
+                                                                        Profiles are subtle — bots vary each hand
+                                                                    </div>
+                                                                    {PROFILE_ORDER.map(style => {
+                                                                        const m = PROFILE_META[style];
+                                                                        const Ico = m.Icon;
+                                                                        const selected = currentStyle === style
+                                                                            || (style === BotPlayStyle.LAG && currentStyle === BotPlayStyle.AGGRESSIVE)
+                                                                            || (style === BotPlayStyle.NIT && currentStyle === BotPlayStyle.PASSIVE);
+                                                                        return (
+                                                                            <button
+                                                                                key={style}
+                                                                                onClick={() => { updateBotConfig(id, 'playStyle', style); setPlayStyleOpenFor(null); }}
+                                                                                className={`w-full flex items-center px-2 py-1.5 rounded text-left text-xs transition-colors ${selected ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5'}`}
+                                                                            >
+                                                                                <Ico size={14} className={`mr-2 ${m.color}`} />
+                                                                                <div className="flex-1">
+                                                                                    <div className="font-semibold leading-tight">{m.label}</div>
+                                                                                    <div className="text-[10px] text-white/40 leading-tight">{m.tag}</div>
+                                                                                </div>
+                                                                                {selected && <Check size={12} className="text-emerald-400 ml-1" />}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </>
                                     )}
                                     {!isClient && (

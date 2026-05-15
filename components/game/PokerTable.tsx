@@ -48,8 +48,11 @@ export const PokerTable: React.FC = () => {
              }
         };
 
-        // AI Thinking Time (Simulated delay + Async execution)
-        const timer = setTimeout(makeDecision, 1500); 
+        // Persona-driven "thinking" time — feels more human than a fixed delay.
+        const base = currentPlayer.runtimePersona?.thinkMsBase ?? 1500;
+        const jitter = currentPlayer.runtimePersona?.thinkMsJitter ?? 0;
+        const delay = Math.max(400, base + (Math.random() * 2 - 1) * jitter);
+        const timer = setTimeout(makeDecision, delay);
 
         return () => clearTimeout(timer);
     }

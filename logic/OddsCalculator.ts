@@ -2,6 +2,19 @@ import { CardDef, Player } from '../types';
 import { HandEvaluator } from './handEvaluator';
 import { Deck } from './Deck';
 
+// Tiny LRU-ish cache for repeated calls within the same street (e.g. the same
+// bot re-evaluated multiple times after re-raises). Keyed by hole+board+opp+iter.
+const ODDS_CACHE = new Map<string, { ts: number; value: number }>();
+const CACHE_TTL_MS = 30_000;
+const CACHE_MAX = 256;
+
+function cacheKey(my: CardDef[], board: CardDef[], opp: number, iter: number): string {
+  const ser = (c: CardDef) => `${c.rank}${c.suit}`;
+  const myK = [...my].map(ser).sort().join('');
+  const bK = [...board].map(ser).sort().join('');
+  return `${myK}|${bK}|${opp}|${iter}`;
+}
+
 // Simplified Monte Carlo Simulation
 // In a real app, this should run in a Web Worker to avoid blocking UI
 export const OddsCalculator = {
@@ -12,6 +25,11 @@ export const OddsCalculator = {
     iterations = 1000
   ): number {
     if (myCards.length !== 2) return 0;
+
+    const key = cacheKey(myCards, communityCards, totalActivePlayers, iterations);
+    const now = Date.now();
+    const hit = ODDS_CACHE.get(key);
+    if (hit && now - hit.ts < CACHE_TTL_MS) return hit.value;
 
     let wins = 0;
     const deck = new Deck(); // Use a fresh deck logic
@@ -53,6 +71,14 @@ export const OddsCalculator = {
         if (!lost) wins++;
     }
 
-    return Math.round((wins / iterations) * 100);
+    const value = Math.round((wins / iterations) * 100);
+
+    // Cache write + simple size bound
+    if (ODDS_CACHE.size >= CACHE_MAX) {
+      const firstKey = ODDS_CACHE.keys().next().value;
+      if (firstKey !== undefined) ODDS_CACHE.delete(firstKey);
+    }
+    ODDS_CACHE.set(key, { ts: now, value });
+    return value;
   }
 };

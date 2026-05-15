@@ -38,9 +38,38 @@ export enum BotDifficulty {
 
 export enum BotPlayStyle {
   RANDOM = 'RANDOM',
+  // Legacy enum values (kept for backward-compatible saved settings).
+  // Internally re-mapped to modern personas: AGGRESSIVE -> LAG, PASSIVE -> NIT.
   AGGRESSIVE = 'AGGRESSIVE',
   PASSIVE = 'PASSIVE',
   SCHLITZOHR = 'SCHLITZOHR',
+  // New, subtler archetypes.
+  TAG = 'TAG',                       // Tight-Aggressive
+  LAG = 'LAG',                       // Loose-Aggressive
+  NIT = 'NIT',                       // Tight-Passive
+  ROCK = 'ROCK',                     // Ultra-tight
+  CALLING_STATION = 'CALLING_STATION', // Calls way too much
+  MANIAC = 'MANIAC',                 // Hyper-aggressive, lots of bluffs
+  WILD_CARD = 'WILD_CARD',           // High variance, unpredictable
+}
+
+export type BotMood = 'cautious' | 'normal' | 'frisky';
+
+/**
+ * Numeric persona traits — all in [0, 1] unless noted. These drive every
+ * bot decision. Profiles supply the *base* values; per-hand jitter, mood
+ * and tilt nudge them at hand-start (see logic/BotProfiles.ts).
+ */
+export interface BotPersona {
+  aggression: number;       // Tendency to bet/raise with marginal hands
+  tightness: number;        // Preflop range cutoff (high = nit)
+  bluffFrequency: number;   // Pure-bluff likelihood with weak holdings
+  callStation: number;      // Pull toward calling over folding/raising
+  trapping: number;         // Slow-play monsters
+  adaptability: number;     // Reaction to opponent aggression
+  tiltResistance: number;   // Immunity to recent-loss tilt
+  thinkMsBase: number;      // Reaction-time centre (ms)
+  thinkMsJitter: number;    // ±jitter on reaction time (ms)
 }
 
 export enum DeckType {
@@ -138,6 +167,11 @@ export interface Player {
   winOdds?: number; // Calculated probability 0-100
   isRemote?: boolean; // New: Is this a remote P2P player?
   peerId?: string; // New: P2P ID
+  // Runtime bot state (regenerated each hand; not persisted across sessions).
+  runtimePersona?: BotPersona;
+  mood?: BotMood;
+  tiltLevel?: number; // 0..1, raised by losing big pots
+  lastHandChips?: number; // Used to compute tilt delta on hand start
 }
 
 export interface Pot {
@@ -169,6 +203,7 @@ export interface GameState {
   minBet: number;
   minRaise: number;
   lastAggressorId: string | null;
+  raisesThisStreet: number; // Count of RAISE actions on the current street (resets at next phase)
   winners: string[]; // IDs
   handsPlayedInSession: number;
   lastEvent: GameEvent | null; // Trigger for UI/Audio effects

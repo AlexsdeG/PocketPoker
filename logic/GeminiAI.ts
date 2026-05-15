@@ -45,14 +45,41 @@ export const GeminiAI = {
         ? `Estimated Win Probability: ${bot.winOdds}%` 
         : "Win Probability: Unknown (Calculate based on hand strength)";
 
-    // Playstyle Context
-    const playStyle = bot.playStyle || 'RANDOM';
-    const styleInstructions = {
-        'RANDOM': "You are unpredictable. Occasionally bluff or make wild moves, but generally try to win.",
-        'AGGRESSIVE': "You are an Aggressive player. You like to Raise and Re-Raise. You bluff frequently. You treat checks as weakness.",
-        'PASSIVE': "You are a Passive player (Calling Station). You rarely Raise. You prefer to Check/Call unless you have the nuts.",
-        'SCHLITZOHR': "You are a 'Tricky' player. You trap with strong hands (Check-Raise). You float with weak hands to bluff later. You are unpredictable."
-    }[playStyle] || "Play standard optimal poker.";
+    // Playstyle / Persona Context. Persona traits are richer than the bare
+    // enum: when present, we inject the numeric profile that the heuristic
+    // engine also uses so Gemini-controlled bots behave consistently.
+    const persona = bot.runtimePersona;
+    const mood = bot.mood ?? 'normal';
+    const tilt = bot.tiltLevel ?? 0;
+    let styleInstructions: string;
+    if (persona) {
+        const fmt = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+        styleInstructions = `
+You play to a numeric persona. Each trait is in 0..1. Higher means MORE of that quality:
+  • aggression:      ${fmt(persona.aggression)}   (raises vs marginal hands)
+  • tightness:       ${fmt(persona.tightness)}    (folds weak hands preflop)
+  • bluffFrequency:  ${fmt(persona.bluffFrequency)} (pure bluff likelihood)
+  • callStation:     ${fmt(persona.callStation)}  (calls instead of fold/raise)
+  • trapping:        ${fmt(persona.trapping)}     (slow-plays monsters)
+  • adaptability:    ${fmt(persona.adaptability)} (reacts to opp aggression)
+Current mood: ${mood}.  Tilt level: ${fmt(tilt)} (high tilt → looser, more emotional).
+Match these numbers — don't be a caricature. Subtle wins.`;
+    } else {
+        const playStyle = bot.playStyle || 'RANDOM';
+        styleInstructions = ({
+            'RANDOM':     "You are unpredictable. Mix actions, but stay rational.",
+            'AGGRESSIVE': "Loose-aggressive. Raise marginal hands, bluff regularly, but fold weak vs huge bets.",
+            'PASSIVE':    "Tight-passive. Rarely raise, prefer check/call with reasonable hands, fold trash.",
+            'SCHLITZOHR': "Tricky. Trap with monsters (check-raise), float with backdoors, mix it up.",
+            'TAG':        "Tight-aggressive. Play strong hands hard, fold marginal pre, value-bet flop.",
+            'LAG':        "Loose-aggressive. Wide range, lots of barrels, controlled bluffs.",
+            'NIT':        "Very tight. Only premium hands. Almost no bluffs.",
+            'ROCK':       "Ultra-tight. Only AA/KK/QQ/AK type holdings get played.",
+            'CALLING_STATION': "Calls too much. Rarely folds, almost never raises without strong hands.",
+            'MANIAC':     "Hyper-aggressive. Bluffs often, raises pots constantly — but still fold pure air vs huge bets.",
+            'WILD_CARD':  "Unpredictable. High variance. Mix bluffs, traps, and folds.",
+        } as Record<string, string>)[playStyle] || "Play standard optimal poker.";
+    }
 
     // Game Context String
     const prompt = `

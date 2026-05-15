@@ -1,130 +1,230 @@
-import { GameState, Player, PlayerActionType, HandResult, GamePhase, BotPlayStyle } from '../types';
-import { HandEvaluator } from './handEvaluator';
+import {
+  BotPersona,
+  CardDef,
+  GamePhase,
+  GameState,
+  Player,
+  PlayerActionType,
+} from '../types';
+import { OddsCalculator } from './OddsCalculator';
+import { materializePersona } from './BotProfiles';
 
+/**
+ * Equity-aware bot decision engine.
+ *
+ * Pipeline:
+ *   1. Resolve runtime persona (already materialized by the store at hand-start;
+ *      otherwise fall back to a fresh materialization).
+ *   2. Compute hand strength:
+ *        • Preflop  → Chen-style score normalised to ~0..1.
+ *        • Postflop → Monte-Carlo equity from OddsCalculator (150 iters, cached).
+ *   3. Build situational context (pot odds, SPR, raises-this-street, am I the
+ *      last aggressor, commitment).
+ *   4. Apply hard safety gates that prevent infinite-raise loops.
+ *   5. Score each legal action (FOLD/CHECK/CALL/RAISE) with persona + equity +
+ *      context, plus small noise, and pick the highest.
+ *   6. Size the raise from pot * (aggression-flavoured factor).
+ */
 export const BotLogic = {
-  /**
-   * Decides the next move for a bot.
-   */
   decide(gameState: GameState, bot: Player): { action: PlayerActionType; amount?: number } {
-    const { communityCards, minBet, pot, players } = gameState;
-    
-    // 1. Basic Setup
+    const persona: BotPersona =
+      bot.runtimePersona ?? materializePersona(bot.playStyle, bot.tiltLevel ?? 0).persona;
+
+    const { communityCards, minBet, pot, players, phase, bigBlind, minRaise } = gameState;
     const currentBet = bot.currentBet;
-    const callAmount = minBet - currentBet;
-    const isPreFlop = gameState.phase === GamePhase.PRE_FLOP;
+    const callAmount = Math.max(0, minBet - currentBet);
     const isCheckAvailable = callAmount === 0;
+    const isPreFlop = phase === GamePhase.PRE_FLOP;
 
-    // 2. Evaluate Hand Strength (0 to ~8000 depending on library, normalized here roughly)
-    const handResult = HandEvaluator.evaluate(bot.holeCards, communityCards);
-    
-    const rankStrength: Record<string, number> = {
-        "High Card": 1,
-        "Pair": 2,
-        "Two Pair": 3,
-        "Three of a Kind": 4,
-        "Straight": 5,
-        "Flush": 6,
-        "Full House": 7,
-        "Four of a Kind": 8,
-        "Straight Flush": 9,
-        "Royal Flush": 10
-    };
+    const activeOpponents = players.filter(p => p.isActive && p.id !== bot.id).length;
+    const equity = computeEquity(bot.holeCards, communityCards, isPreFlop, Math.max(1, activeOpponents));
 
-    const baseStrength = rankStrength[handResult.rank] || 1;
-    let strengthScore = baseStrength;
+    const potAfterCall = pot + callAmount;
+    const potOdds = callAmount > 0 ? callAmount / potAfterCall : 0;
+    const aggressorIsMe = gameState.lastAggressorId === bot.id;
+    const raisesThisStreet = gameState.raisesThisStreet ?? 0;
+    const committedFraction = bot.currentBet / Math.max(1, bot.currentBet + bot.chips);
 
-    // Adjust for Pre-Flop
-    if (isPreFlop) {
-        const c1 = bot.holeCards[0].value;
-        const c2 = bot.holeCards[1].value;
-        const isPair = c1 === c2;
-        const sum = c1 + c2;
-        
-        if (isPair && c1 >= 10) strengthScore = 8; // AA, KK, QQ, JJ, TT
-        else if (isPair) strengthScore = 5; // Small pair
-        else if (sum > 25) strengthScore = 6; // AK, AQ
-        else if (sum > 20) strengthScore = 3; // KJ, QJ
-        else strengthScore = 1;
+    // ---- Preflop range gate (tightness) --------------------------------------
+    // Very tight personas just fold weak hands preflop to a bet rather than
+    // ever entering the pot.
+    if (isPreFlop && !isCheckAvailable) {
+      const playThreshold = 0.18 + persona.tightness * 0.30; // ~0.18..0.48
+      if (equity < playThreshold && committedFraction < 0.10 && Math.random() > persona.callStation * 0.5) {
+        return { action: PlayerActionType.FOLD };
+      }
     }
 
-    // 3. Playstyle Modifiers
-    const style = bot.playStyle || BotPlayStyle.RANDOM;
-    const roll = Math.random();
-    
-    // "Schlitzohr" (Tricky) - sometimes bluffs weak hands, traps with strong hands
-    const isSchlitzohr = style === BotPlayStyle.SCHLITZOHR;
-    // "Aggressive" - Raises more, calls less
-    const isAggressive = style === BotPlayStyle.AGGRESSIVE;
-    // "Passive" - Calls more, rarely raises
-    const isPassive = style === BotPlayStyle.PASSIVE;
-    
-    // 4. Decision Logic
+    // ---- Hard safety gates (anti-infinite-raise) -----------------------------
 
-    // --- RANDOM ---
-    // High Chaos, but still grounded in rule compliance
-    if (style === BotPlayStyle.RANDOM) {
-        const randomRoll = Math.random();
-        if (randomRoll < 0.2) return { action: PlayerActionType.FOLD }; // 20% fold always
-        if (randomRoll < 0.6) return { action: isCheckAvailable ? PlayerActionType.CHECK : PlayerActionType.CALL }; 
-        // Raise logic
-        const raiseAmt = minBet + gameState.bigBlind;
-        if (bot.chips >= raiseAmt - currentBet) {
-             return { action: PlayerActionType.RAISE, amount: raiseAmt + minBet };
-        }
+    // Never re-raise our own aggression. If everyone just called us we check.
+    if (aggressorIsMe && isCheckAvailable) {
+      return { action: PlayerActionType.CHECK };
+    }
+
+    // Cap raise wars. After 4 raises on a street, only re-raise with monsters.
+    const canRaiseStreet = raisesThisStreet < 4 || equity >= 0.78;
+
+    // Pure trash on weak commitment → fold (even for maniacs).
+    if (!isCheckAvailable && equity < 0.12 && committedFraction < 0.12 && callAmount > bigBlind) {
+      return { action: PlayerActionType.FOLD };
+    }
+
+    // ---- Action scoring ------------------------------------------------------
+
+    const moodOffset = bot.mood === 'frisky' ? 0.05 : bot.mood === 'cautious' ? -0.05 : 0;
+    const trapBoost = persona.trapping * (equity > 0.80 ? 0.3 : 0); // slow-play monsters
+    const aggressionEffective = clamp01(persona.aggression + moodOffset - trapBoost);
+
+    // RAISE score: equity edge × aggression, plus bluff inject for weak hands,
+    // damped by current raise count and commitment.
+    const equityEdge = equity - 0.45; // 0.45 ≈ "neutral" equity baseline
+    const bluffInject =
+      equity < 0.30 && Math.random() < persona.bluffFrequency * (raisesThisStreet < 2 ? 1 : 0.3)
+        ? 0.35
+        : 0;
+    const raiseScore =
+      aggressionEffective * equityEdge * 2.2
+      + bluffInject
+      - raisesThisStreet * 0.18
+      - (committedFraction > 0.5 ? 0.15 : 0);
+
+    // CALL score: equity-vs-pot-odds + call-station pull. When check is free,
+    // this slot represents CHECK.
+    const callScore =
+      (isCheckAvailable ? 0.25 : 0)
+      + Math.max(0, equity - potOdds) * 2.0
+      + persona.callStation * 0.5
+      - (equity < 0.20 && !isCheckAvailable ? 0.6 : 0);
+
+    // FOLD score: only meaningful when there's something to pay.
+    const foldScore = isCheckAvailable
+      ? -1
+      : (1 - persona.callStation) * Math.max(0, potOdds - equity) * 2.0
+        + (equity < 0.25 ? 0.3 : 0)
+        - persona.adaptability * (aggressorIsMe ? 0.1 : 0);
+
+    // Tie-break noise — wider for looser personas.
+    const wildness = 1 - persona.tightness;
+    const noise = () => (Math.random() - 0.5) * 0.15 * (0.4 + wildness);
+
+    const scores: { action: PlayerActionType; score: number }[] = [
+      { action: PlayerActionType.FOLD, score: foldScore + noise() },
+      { action: isCheckAvailable ? PlayerActionType.CHECK : PlayerActionType.CALL, score: callScore + noise() },
+    ];
+    if (canRaiseStreet && bot.chips > callAmount) {
+      scores.push({ action: PlayerActionType.RAISE, score: raiseScore + noise() });
+    }
+
+    scores.sort((a, b) => b.score - a.score);
+    let chosen = scores[0].action;
+
+    // ---- Legalisation --------------------------------------------------------
+
+    if (chosen === PlayerActionType.FOLD && isCheckAvailable) {
+      chosen = PlayerActionType.CHECK;
+    }
+
+    if (chosen === PlayerActionType.CALL && bot.chips < callAmount) {
+      if (equity > potOdds) {
+        return { action: PlayerActionType.ALL_IN, amount: bot.currentBet + bot.chips };
+      }
+      return { action: PlayerActionType.FOLD };
+    }
+
+    if (chosen === PlayerActionType.RAISE) {
+      const amount = computeRaiseAmount(gameState, bot, persona, equity, bluffInject > 0);
+      if (amount >= bot.currentBet + bot.chips) {
+        return { action: PlayerActionType.ALL_IN, amount: bot.currentBet + bot.chips };
+      }
+      const legalMin = minBet + (minRaise || bigBlind);
+      if (amount < legalMin) {
+        if (isCheckAvailable) return { action: PlayerActionType.CHECK };
         return { action: PlayerActionType.CALL };
+      }
+      return { action: PlayerActionType.RAISE, amount };
     }
 
-    // --- STRATEGIC TYPES ---
-    
-    // FOLD LOGIC
-    // Passive folds easily. Aggressive holds on longer.
-    let foldThreshold = 2; 
-    if (isAggressive) foldThreshold = 1.5;
-    if (isPassive) foldThreshold = 2.5;
-
-    // If check is available, we almost never fold unless we are "Random" or weird.
-    // So only check Fold if we have to pay.
-    if (!isCheckAvailable) {
-         // If huge bet relative to pot, consider folding more
-         const potOdds = callAmount / (pot + callAmount);
-         if (strengthScore < foldThreshold && potOdds > 0.1) {
-             // Schlitzohr might float a weak hand
-             if (isSchlitzohr && roll > 0.8) {
-                 // Float
-             } else {
-                 return { action: PlayerActionType.FOLD };
-             }
-         }
-    }
-
-    // RAISE LOGIC
-    let raiseThreshold = 5;
-    if (isAggressive) raiseThreshold = 4;
-    if (isPassive) raiseThreshold = 8; // Only nuts
-    
-    // Bluff Logic
-    let bluffChance = 0;
-    if (isAggressive) bluffChance = 0.3;
-    if (isSchlitzohr) bluffChance = 0.4;
-    
-    const wantsToRaise = strengthScore >= raiseThreshold || (roll < bluffChance && strengthScore < 3);
-
-    if (wantsToRaise) {
-         // Schlitzohr Trap: Check-Raise or slow play strong hands
-         if (isSchlitzohr && strengthScore > 7 && roll < 0.5) {
-             return { action: isCheckAvailable ? PlayerActionType.CHECK : PlayerActionType.CALL };
-         }
-
-         const raiseAmt = minBet + (minBet > 0 ? minBet : gameState.bigBlind); 
-         if (bot.chips >= raiseAmt - currentBet) {
-             return { action: PlayerActionType.RAISE, amount: raiseAmt + minBet };
-         }
-    }
-
-    // CALL/CHECK as fallback
-    if (isCheckAvailable) return { action: PlayerActionType.CHECK };
-    if (bot.chips >= callAmount) return { action: PlayerActionType.CALL };
-    
-    return { action: PlayerActionType.FOLD };
-  }
+    return { action: chosen };
+  },
 };
+
+// --- Helpers ---------------------------------------------------------------
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+/** Returns equity in [0, 1]. Preflop uses Chen-style heuristic; postflop uses Monte Carlo. */
+function computeEquity(
+  holeCards: CardDef[],
+  communityCards: CardDef[],
+  isPreFlop: boolean,
+  activeOpponents: number,
+): number {
+  if (!holeCards || holeCards.length < 2) return 0;
+  if (isPreFlop) return chenEquity(holeCards, activeOpponents);
+  // 150 iters keeps per-call cost ≈10–25 ms; cached per (hand, board, opp, iter).
+  const winPct = OddsCalculator.calculate(holeCards, communityCards, activeOpponents + 1, 150);
+  return clamp01(winPct / 100);
+}
+
+/**
+ * Chen formula (slightly simplified) → normalised to ~[0, 1].
+ *  • High card score: A=10, K=8, Q=7, J=6, T=5, else value/2.
+ *  • Pair: max(highScore * 2, 5).
+ *  • Suited: +2.
+ *  • Gap: 1→-1, 2→-2, 3→-4, ≥4→-5.
+ *  • Connectors (gap≤1, high≤Q): +1.
+ *  • Multi-way penalty per extra opponent.
+ */
+function chenEquity(holeCards: CardDef[], activeOpponents: number): number {
+  const a = holeCards[0];
+  const b = holeCards[1];
+  const high = Math.max(a.value, b.value);
+  const low = Math.min(a.value, b.value);
+  const highScore = (v: number) =>
+    v === 14 ? 10 : v === 13 ? 8 : v === 12 ? 7 : v === 11 ? 6 : v === 10 ? 5 : v / 2;
+
+  let score: number;
+  if (a.value === b.value) {
+    score = Math.max(highScore(high) * 2, 5);
+  } else {
+    score = highScore(high);
+    if (a.suit === b.suit) score += 2;
+    const gap = high - low - 1;
+    if (gap === 1) score -= 1;
+    else if (gap === 2) score -= 2;
+    else if (gap === 3) score -= 4;
+    else if (gap >= 4) score -= 5;
+    if (gap <= 1 && high <= 12) score += 1;
+  }
+
+  let normalised = score / 22;
+  const oppPenalty = Math.max(0, activeOpponents - 1) * 0.04;
+  normalised -= oppPenalty;
+  return Math.max(0.08, Math.min(0.88, normalised));
+}
+
+/** Pot-sized raise modulated by aggression / bluff intent / mood. */
+function computeRaiseAmount(
+  gameState: GameState,
+  bot: Player,
+  persona: BotPersona,
+  equity: number,
+  isBluff: boolean,
+): number {
+  const { pot, minBet, bigBlind, minRaise } = gameState;
+
+  const factor = isBluff
+    ? 0.4 + persona.bluffFrequency * 0.3 + (bot.mood === 'frisky' ? 0.1 : 0)
+    : 0.5 + persona.aggression * 0.5 + (equity > 0.75 ? 0.2 : 0);
+
+  let target = Math.round(minBet + Math.max(bigBlind, pot * factor));
+  target = Math.max(target, minBet + (minRaise || bigBlind));
+  target = Math.round(target / bigBlind) * bigBlind;
+
+  const max = bot.currentBet + bot.chips;
+  if (target > max) target = max;
+  return target;
+}

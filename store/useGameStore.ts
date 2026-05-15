@@ -7,6 +7,7 @@ import { Deck } from '../logic/Deck';
 import { HandEvaluator } from '../logic/handEvaluator';
 import { OddsCalculator } from '../logic/OddsCalculator';
 import { NetworkManager } from '../logic/NetworkManager';
+import { materializePersona, updateTiltLevel } from '../logic/BotProfiles';
 
 interface State {
   // UI State
@@ -108,6 +109,7 @@ const INITIAL_GAME_STATE: GameState = {
   minBet: 20,
   minRaise: 20,
   lastAggressorId: null,
+  raisesThisStreet: 0,
   winners: [],
   handsPlayedInSession: 0,
   lastEvent: null
@@ -613,6 +615,21 @@ export const useGameStore = create<State>()(
         state.gameState.phase = GamePhase.PRE_FLOP;
         state.gameState.minBet = state.gameState.bigBlind;
         state.gameState.minRaise = state.gameState.bigBlind;
+        state.gameState.raisesThisStreet = 0;
+
+        // Refresh bot personas at the start of every hand so each round feels
+        // different even with the same lineup. Tilt is derived from the chip
+        // delta versus the previous hand.
+        state.gameState.players.forEach(p => {
+            if (!p.isBot) return;
+            const prevChips = p.lastHandChips ?? p.chips;
+            const delta = p.chips - prevChips;
+            p.tiltLevel = updateTiltLevel(p.tiltLevel, delta, Math.max(1, p.chips));
+            const { persona, mood } = materializePersona(p.playStyle, p.tiltLevel);
+            p.runtimePersona = persona;
+            p.mood = mood;
+            p.lastHandChips = p.chips;
+        });
         
         // Event for DEAL sound
         state.gameState.lastEvent = { id: uuidv4(), type: 'DEAL' };
@@ -815,16 +832,22 @@ export const useGameStore = create<State>()(
             }
             break;
 
-          case PlayerActionType.RAISE:
-            const totalBet = amount;
+          case PlayerActionType.RAISE: {
+            // Defensive clamp: ensure bot-emitted amounts respect minRaise and
+            // can never exceed the player's stack.
+            const legalMin = Math.max(state.gameState.minBet + (state.gameState.minRaise || state.gameState.bigBlind), state.gameState.minBet);
+            const maxTotal = player.currentBet + player.chips;
+            let totalBet = Math.max(amount, legalMin);
+            if (totalBet > maxTotal) totalBet = maxTotal;
             const raiseCost = totalBet - player.currentBet;
-            if (player.chips >= raiseCost) {
+            if (player.chips >= raiseCost && raiseCost > 0) {
               player.chips -= raiseCost;
               player.currentBet = totalBet;
               state.gameState.pot += raiseCost;
               state.gameState.minBet = totalBet;
               state.gameState.minRaise = totalBet * 2;
               state.gameState.lastAggressorId = player.id;
+              state.gameState.raisesThisStreet = (state.gameState.raisesThisStreet ?? 0) + 1;
               
               players.forEach(p => {
                 if (p.id !== player.id && p.isActive && !p.isAllIn) {
@@ -841,6 +864,27 @@ export const useGameStore = create<State>()(
               }
             }
             break;
+          }
+          case PlayerActionType.ALL_IN: {
+            const allInCost = player.chips;
+            const newBet = player.currentBet + allInCost;
+            player.currentBet = newBet;
+            player.chips = 0;
+            player.isAllIn = true;
+            player.hasActed = true;
+            state.gameState.pot += allInCost;
+            if (newBet > state.gameState.minBet) {
+              state.gameState.minBet = newBet;
+              state.gameState.minRaise = newBet * 2;
+              state.gameState.lastAggressorId = player.id;
+              state.gameState.raisesThisStreet = (state.gameState.raisesThisStreet ?? 0) + 1;
+              players.forEach(p => {
+                if (p.id !== player.id && p.isActive && !p.isAllIn) p.hasActed = false;
+              });
+            }
+            state.gameState.lastEvent = { id: uuidv4(), type: 'ALL_IN', playerId: player.id, amount: allInCost };
+            break;
+          }
         }
 
         const activePlayers = players.filter(p => p.isActive && !p.isAllIn);
@@ -966,6 +1010,8 @@ function nextPhase(state: State) {
     
     players.forEach(p => { p.currentBet = 0; p.hasActed = false; });
     state.gameState.minBet = 0;
+    state.gameState.raisesThisStreet = 0;
+    state.gameState.lastAggressorId = null;
     let eventType: 'FLOP' | 'TURN_RIVER' = 'TURN_RIVER';
 
     switch (phase) {
